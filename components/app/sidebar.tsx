@@ -12,6 +12,7 @@ import {
   Trophy,
   MessageSquare,
   Settings,
+  ShieldCheck,
 } from "lucide-react";
 
 const NAV = [
@@ -25,8 +26,14 @@ const NAV = [
   { href: "/settings", icon: Settings, label: "Settings" },
 ];
 
-export function Sidebar() {
+export function Sidebar({ showAdmin = false }: { showAdmin?: boolean }) {
   const pathname = usePathname();
+  const nav = showAdmin
+    ? [
+        ...NAV,
+        { href: "/admin", icon: ShieldCheck, label: "Admin" },
+      ]
+    : NAV;
   return (
     <aside className="hidden lg:flex flex-col w-64 shrink-0 border-r border-border bg-surface/40 backdrop-blur h-screen sticky top-0">
       <div className="p-5 border-b border-border/60">
@@ -40,7 +47,7 @@ export function Sidebar() {
         </Link>
       </div>
       <nav className="flex-1 p-3 space-y-0.5">
-        {NAV.map((n) => {
+        {nav.map((n) => {
           const active =
             pathname === n.href ||
             (n.href !== "/dashboard" && pathname.startsWith(n.href));

@@ -24,9 +24,11 @@ import { createClient } from "@/lib/supabase/client";
 export function Topbar({
   userEmail,
   fullName,
+  showAdmin = false,
 }: {
   userEmail: string | null;
   fullName: string | null;
+  showAdmin?: boolean;
 }) {
   const router = useRouter();
   const { open } = useChatSheet();
@@ -88,6 +90,11 @@ export function Topbar({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            {showAdmin && (
+              <DropdownMenuItem asChild>
+                <Link href="/admin">Admin Console</Link>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem asChild>
               <Link href="/settings">
                 <User className="h-4 w-4" /> Account

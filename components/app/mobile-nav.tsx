@@ -9,6 +9,7 @@ import {
   Timer,
   MessageSquare,
   Trophy,
+  ShieldCheck,
 } from "lucide-react";
 
 const NAV = [
@@ -19,12 +20,15 @@ const NAV = [
   { href: "/chat", icon: MessageSquare, label: "Tutor" },
 ];
 
-export function MobileNav() {
+export function MobileNav({ showAdmin = false }: { showAdmin?: boolean }) {
   const pathname = usePathname();
+  const nav = showAdmin
+    ? [...NAV, { href: "/admin", icon: ShieldCheck, label: "Admin" }]
+    : NAV;
   return (
     <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border bg-surface/90 backdrop-blur-xl">
-      <div className="grid grid-cols-5">
-        {NAV.map((n) => {
+      <div className={cn("grid", showAdmin ? "grid-cols-6" : "grid-cols-5")}>
+        {nav.map((n) => {
           const active =
             pathname === n.href ||
             (n.href !== "/dashboard" && pathname.startsWith(n.href));

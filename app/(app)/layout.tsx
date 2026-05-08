@@ -5,6 +5,7 @@ import { Topbar } from "@/components/app/topbar";
 import { MobileNav } from "@/components/app/mobile-nav";
 import { ChatSheetProvider } from "@/components/chat/chat-sheet-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { maybeBootstrapAdmin } from "@/lib/auth/bootstrap-admin";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -13,6 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   } = await supabase.auth.getUser();
 
   if (!user) redirect("/login");
+  await maybeBootstrapAdmin(supabase, user);
 
   const { data: profile } = await supabase
     .from("profiles")

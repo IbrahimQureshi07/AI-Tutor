@@ -5,11 +5,26 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { isBootstrapAdminEmail } from "@/lib/auth/bootstrap-admin";
 
+const CreateBody = z.object({
+  email: z.string().email(),
+  password: z.string().min(6, "Password must be at least 6 characters."),
+  fullName: z.string().trim().optional(),
+  role: z.enum(["student", "admin"]).default("student"),
+});
+
 const UpdateBody = z.object({
   userId: z.string().uuid(),
   role: z.enum(["student", "admin"]).optional(),
   isActive: z.boolean().optional(),
 });
+
+function formatAuthAdminError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("already") && (m.includes("registered") || m.includes("exists"))) {
+    return "A user with this email already exists.";
+  }
+  return message;
+}
 
 function hasMissingRoleColumns(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -65,6 +80,88 @@ export async function GET() {
   });
 
   return NextResponse.json({ users: items });
+}
+
+export async function POST(request: Request) {
+  const supabase = await createClient();
+  const guard = await requireAdmin(supabase);
+  if (!guard.ok) {
+    return NextResponse.json(
+      { error: guard.reason === "unauthorized" ? "unauthorized" : "forbidden" },
+      { status: guard.reason === "unauthorized" ? 401 : 403 },
+    );
+  }
+
+  const parsed = CreateBody.safeParse(await request.json().catch(() => ({})));
+  if (!parsed.success) {
+    const flat = parsed.error.flatten();
+    const first =
+      flat.fieldErrors.password?.[0] ??
+      flat.fieldErrors.email?.[0] ??
+      "Invalid input.";
+    return NextResponse.json({ error: first, details: flat }, { status: 400 });
+  }
+
+  const { email, password, fullName, role } = parsed.data;
+  const admin = createAdminClient();
+
+  const { data: created, error: createErr } = await admin.auth.admin.createUser({
+    email: email.trim().toLowerCase(),
+    password,
+    email_confirm: true,
+    user_metadata: {
+      full_name: fullName?.trim() || email.split("@")[0],
+    },
+  });
+
+  if (createErr || !created.user) {
+    const msg = createErr?.message ?? "Could not create user.";
+    const status = msg.toLowerCase().includes("already") ? 409 : 500;
+    return NextResponse.json(
+      { error: formatAuthAdminError(msg) },
+      { status },
+    );
+  }
+
+  const userId = created.user.id;
+  const displayName =
+    fullName?.trim() ||
+    (created.user.user_metadata?.full_name as string | undefined) ||
+    email.split("@")[0];
+
+  const { error: profileErr } = await admin.from("profiles").upsert(
+    {
+      id: userId,
+      full_name: displayName,
+      role,
+      is_active: true,
+    },
+    { onConflict: "id" },
+  );
+
+  if (profileErr && !hasMissingRoleColumns(profileErr)) {
+    return NextResponse.json({ error: profileErr.message }, { status: 500 });
+  }
+
+  if (profileErr && hasMissingRoleColumns(profileErr)) {
+    await admin.from("profiles").upsert(
+      { id: userId, full_name: displayName },
+      { onConflict: "id" },
+    );
+  }
+
+  return NextResponse.json({
+    user: {
+      id: userId,
+      email: created.user.email ?? email,
+      fullName: displayName,
+      role: hasMissingRoleColumns(profileErr) && isBootstrapAdminEmail(email)
+        ? "admin"
+        : role,
+      isActive: true,
+      createdAt: created.user.created_at,
+    },
+  });
 }
 
 export async function PATCH(request: Request) {

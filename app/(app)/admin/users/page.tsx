@@ -5,6 +5,9 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { UserPlus } from "lucide-react";
 
 type AdminUserRow = {
   id: string;
@@ -15,10 +18,27 @@ type AdminUserRow = {
   createdAt: string | null;
 };
 
+type CreateFormState = {
+  fullName: string;
+  email: string;
+  password: string;
+  role: "student" | "admin";
+};
+
+const EMPTY_CREATE: CreateFormState = {
+  fullName: "",
+  email: "",
+  password: "",
+  role: "student",
+};
+
 export default function AdminUsersPage() {
   const [rows, setRows] = React.useState<AdminUserRow[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [savingId, setSavingId] = React.useState<string | null>(null);
+  const [showAdd, setShowAdd] = React.useState(false);
+  const [creating, setCreating] = React.useState(false);
+  const [createForm, setCreateForm] = React.useState(EMPTY_CREATE);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -65,14 +85,146 @@ export default function AdminUsersPage() {
     }
   }
 
+  async function createUser(e: React.FormEvent) {
+    e.preventDefault();
+    setCreating(true);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: createForm.email.trim(),
+          password: createForm.password,
+          fullName: createForm.fullName.trim() || undefined,
+          role: createForm.role,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json.error ?? "Could not create user.");
+        return;
+      }
+      const created = json.user as AdminUserRow | undefined;
+      if (created) {
+        setRows((prev) => [created, ...prev]);
+      } else {
+        await load();
+      }
+      toast.success("User created. Share the password with them securely.");
+      setCreateForm(EMPTY_CREATE);
+      setShowAdd(false);
+    } finally {
+      setCreating(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-serif text-3xl font-semibold tracking-tight">Users</h1>
-        <p className="text-ink-muted mt-1 text-sm">
-          Manage access, role, and account status.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-serif text-3xl font-semibold tracking-tight">Users</h1>
+          <p className="text-ink-muted mt-1 text-sm">
+            Add accounts, change roles, or deactivate access.
+          </p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => setShowAdd((v) => !v)}
+        >
+          <UserPlus className="h-4 w-4" />
+          {showAdd ? "Close form" : "Add user"}
+        </Button>
       </div>
+
+      {showAdd && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Add user</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-ink-muted mb-4 leading-relaxed">
+              Creates a login with the password you set here. Share email and
+              password with the person directly — no invite email is sent.
+            </p>
+            <form onSubmit={createUser} className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="add-fullName">Full name (optional)</Label>
+                <Input
+                  id="add-fullName"
+                  value={createForm.fullName}
+                  onChange={(e) =>
+                    setCreateForm((f) => ({ ...f, fullName: e.target.value }))
+                  }
+                  placeholder="Jane Appleseed"
+                  autoComplete="name"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="add-email">Email</Label>
+                <Input
+                  id="add-email"
+                  type="email"
+                  value={createForm.email}
+                  onChange={(e) =>
+                    setCreateForm((f) => ({ ...f, email: e.target.value }))
+                  }
+                  placeholder="user@example.com"
+                  required
+                  autoComplete="off"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="add-password">Password</Label>
+                <Input
+                  id="add-password"
+                  type="password"
+                  value={createForm.password}
+                  onChange={(e) =>
+                    setCreateForm((f) => ({ ...f, password: e.target.value }))
+                  }
+                  placeholder="Min. 6 characters"
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="add-role">Role</Label>
+                <select
+                  id="add-role"
+                  value={createForm.role}
+                  onChange={(e) =>
+                    setCreateForm((f) => ({
+                      ...f,
+                      role: e.target.value as "student" | "admin",
+                    }))
+                  }
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="student">student</option>
+                  <option value="admin">admin</option>
+                </select>
+              </div>
+              <div className="md:col-span-2 flex gap-2">
+                <Button type="submit" disabled={creating}>
+                  {creating ? "Creating…" : "Create user"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowAdd(false);
+                    setCreateForm(EMPTY_CREATE);
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -139,4 +291,3 @@ export default function AdminUsersPage() {
     </div>
   );
 }
-

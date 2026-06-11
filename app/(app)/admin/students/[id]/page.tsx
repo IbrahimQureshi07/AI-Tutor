@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type SectionMastery = {
@@ -117,6 +118,38 @@ export default function AdminStudentDetailPage() {
   const id = params?.id;
   const [data, setData] = React.useState<DetailResponse | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [downloading, setDownloading] = React.useState(false);
+
+  const downloadPdf = React.useCallback(async () => {
+    if (!id) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(`/api/admin/students/${id}/pdf`, {
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        toast.error(json.error ?? "Could not generate report card.");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const name = (data?.student.fullName ?? data?.student.email ?? "student")
+        .replace(/[^a-z0-9]+/gi, "-")
+        .toLowerCase();
+      a.download = `report-card-${name}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Could not generate report card.");
+    } finally {
+      setDownloading(false);
+    }
+  }, [id, data]);
 
   React.useEffect(() => {
     if (!id) return;
@@ -178,9 +211,14 @@ export default function AdminStudentDetailPage() {
           </div>
           <p className="text-sm text-ink-muted mt-1">{student.email ?? "—"}</p>
         </div>
-        <div className="text-right text-xs text-ink-muted space-y-0.5">
-          <div>Joined: {fmtDate(student.createdAt)}</div>
-          <div>Last sign-in: {fmtDate(student.lastSignInAt)}</div>
+        <div className="flex flex-col items-end gap-2">
+          <Button size="sm" onClick={downloadPdf} disabled={downloading}>
+            {downloading ? "Preparing…" : "Download report card"}
+          </Button>
+          <div className="text-right text-xs text-ink-muted space-y-0.5">
+            <div>Joined: {fmtDate(student.createdAt)}</div>
+            <div>Last sign-in: {fmtDate(student.lastSignInAt)}</div>
+          </div>
         </div>
       </div>
 

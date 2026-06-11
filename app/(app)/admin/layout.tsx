@@ -41,6 +41,12 @@ export default async function AdminLayout({
             Dashboard
           </Link>
           <Link
+            href="/admin/students"
+            className="block rounded-lg px-3 py-2 text-sm text-ink hover:bg-elevated"
+          >
+            Students
+          </Link>
+          <Link
             href="/admin/users"
             className="block rounded-lg px-3 py-2 text-sm text-ink hover:bg-elevated"
           >

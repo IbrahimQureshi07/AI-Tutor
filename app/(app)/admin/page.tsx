@@ -23,8 +23,11 @@ export default function AdminHomePage() {
             Admin route guard is now enforced. Next step: wire user management
             and question management screens here.
           </p>
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
             <Button asChild size="sm">
+              <Link href="/admin/students">View students</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
               <Link href="/admin/users">Manage users</Link>
             </Button>
             <Button asChild size="sm" variant="outline">

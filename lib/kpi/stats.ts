@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { SECTIONS, type SectionCode } from "@/lib/constants";
 
@@ -64,8 +65,13 @@ function emptyModeTotals(): ModeSessionTotals {
   return { assessment: 0, practice: 0, mistakes: 0, mock: 0, final: 0 };
 }
 
-export async function getUserStats(userId: string): Promise<UserStats> {
-  const supabase = await createClient();
+export async function getUserStats(
+  userId: string,
+  client?: SupabaseClient,
+): Promise<UserStats> {
+  // Existing callers pass nothing → RLS-bound server client (self only).
+  // Admin callers can pass a service-role client to read any user's stats.
+  const supabase = client ?? (await createClient());
 
   const [
     { data: masteryRows },

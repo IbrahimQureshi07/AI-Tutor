@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -218,7 +219,10 @@ function StudentCard({ s }: { s: StudentRow }) {
           : "danger";
 
   return (
-    <div className="rounded-xl border border-border p-4 space-y-3">
+    <Link
+      href={`/admin/students/${s.id}`}
+      className="block rounded-xl border border-border p-4 space-y-3 transition-colors hover:border-primary/50 hover:bg-elevated/40"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -271,7 +275,7 @@ function StudentCard({ s }: { s: StudentRow }) {
           tone={s.unresolvedMistakes > 0 ? "warn" : "outline"}
         />
       </div>
-    </div>
+    </Link>
   );
 }
 

@@ -89,16 +89,30 @@ const MODE_LABELS: Record<ModeKey, string> = {
 const QUESTION_ONLY_NOTE =
   "Based on individual question attempts — no completed exam session yet.";
 
-function modeStatusLabel(status: ModeSessionStatus): string {
-  const parts: string[] = [];
-  if (status.finished > 0) {
-    parts.push(`${status.finished} finished`);
+function ModeStatusBadges({ status }: { status: ModeSessionStatus }) {
+  const hasFinished = status.finished > 0;
+  const hasPartial = status.partial > 0;
+  if (!hasFinished && !hasPartial) {
+    return (
+      <Badge variant="outline" className="text-[10px]">
+        no sessions
+      </Badge>
+    );
   }
-  if (status.partial > 0) {
-    parts.push(`${status.partial} in progress / partial`);
-  }
-  if (parts.length === 0) return "no sessions";
-  return parts.join(" · ");
+  return (
+    <div className="flex flex-wrap gap-1">
+      {hasFinished && (
+        <Badge variant="success" className="text-[10px]">
+          {status.finished} finished
+        </Badge>
+      )}
+      {hasPartial && (
+        <Badge variant="warn" className="text-[10px]">
+          {status.partial} partial
+        </Badge>
+      )}
+    </div>
+  );
 }
 
 function fmtDate(iso: string | null): string {
@@ -308,29 +322,23 @@ export default function AdminStudentDetailPage() {
               const finished = sessionStatus.finished;
               const latest = series?.latest ?? null;
               const best = series?.best ?? null;
-              const hasFinished = finished > 0;
               return (
                 <div
                   key={m}
-                  className="rounded-xl border border-border p-3 space-y-2"
+                  className="rounded-xl border border-border p-3 space-y-2 min-w-0"
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium">{MODE_LABELS[m]}</span>
-                    <Badge
-                      variant={hasFinished ? "success" : sessionStatus.partial > 0 ? "warn" : "outline"}
-                      className="text-[10px] shrink-0"
-                    >
-                      {modeStatusLabel(sessionStatus)}
-                    </Badge>
+                  <div className="space-y-1.5">
+                    <span className="text-sm font-medium block">{MODE_LABELS[m]}</span>
+                    <ModeStatusBadges status={sessionStatus} />
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-ink-muted">
-                    <span>
+                  <div className="flex flex-col gap-1 text-xs text-ink-muted sm:flex-row sm:flex-wrap sm:gap-x-4 sm:gap-y-1">
+                    <span className="shrink-0">
                       Latest finished:{" "}
                       <span className={cn("font-semibold", tone(latest ?? 0, latest != null))}>
                         {latest != null ? `${latest}%` : "—"}
                       </span>
                     </span>
-                    <span>
+                    <span className="shrink-0">
                       Best finished:{" "}
                       <span className="font-semibold text-ink">
                         {best != null ? `${best}%` : "—"}

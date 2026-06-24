@@ -9,58 +9,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { StudentAttemptLogPanel } from "@/components/admin/student-attempt-log-panel";
-
-type SectionMastery = {
-  code: string;
-  title: string;
-  group: "National" | "State";
-  total: number;
-  correct: number;
-  accuracy: number;
-};
-
-type ModeKey = "assessment" | "practice" | "mistakes" | "mock" | "final";
-
-type ModeSessionStatus = { finished: number; partial: number };
-
-type Stats = {
-  totalAttempts: number;
-  totalCorrect: number;
-  overallAccuracy: number;
-  sevenDayAccuracy: number;
-  streakDays: number;
-  readinessScore: number;
-  mastery: SectionMastery[];
-  topStrengths: SectionMastery[];
-  topWeaknesses: SectionMastery[];
-  unresolvedMistakes: number;
-  nationalAccuracy: number;
-  stateAccuracy: number;
-  activeDaysLast30: number;
-  studyMsLast30: number;
-  modeTotals: Record<ModeKey, number>;
-  modeSessionStatus: Record<ModeKey, ModeSessionStatus>;
-  totalFinishedSessions: number;
-  bestMockScore: number | null;
-  lastMockScore: number | null;
-  lastPracticeScore: number | null;
-};
-
-type JourneyPoint = {
-  id: string;
-  mode: string;
-  started_at: string;
-  finished_at: string | null;
-  score_pct: number | null;
-};
-
-type ModeSeries = {
-  mode: string;
-  latest: number | null;
-  best: number | null;
-  delta: number | null;
-  runs: JourneyPoint[];
-};
+import { StudentHeadlineMetrics } from "@/components/admin/student-headline-metrics";
+import type { SessionHistoryRow } from "@/lib/admin/session-history";
+import type { Journey, JourneyMode } from "@/lib/journey/load";
+import type {
+  ModeKey,
+  ModeSessionStatus,
+  SectionMastery,
+  UserStats,
+} from "@/lib/kpi/stats";
 
 type DetailResponse = {
   student: {
@@ -72,24 +29,8 @@ type DetailResponse = {
     createdAt: string | null;
     lastSignInAt: string | null;
   };
-  stats: Stats;
-  journey: {
-    perMode: Record<string, ModeSeries>;
-    combined: JourneyPoint[];
-  };
-};
-
-type SessionHistoryRow = {
-  id: string;
-  mode: ModeKey;
-  runType: string;
-  status: "in_progress" | "finished" | "abandoned";
-  startedAt: string;
-  finishedAt: string | null;
-  scorePct: number | null;
-  answered: number;
-  total: number;
-  durationMs: number | null;
+  stats: UserStats;
+  journey: Journey;
 };
 
 const MODE_LABELS: Record<ModeKey, string> = {
@@ -170,13 +111,6 @@ function fmtDate(iso: string | null): string {
     month: "short",
     day: "numeric",
   });
-}
-
-function fmtHours(ms: number): string {
-  if (!ms) return "0h";
-  const h = ms / (60 * 60 * 1000);
-  if (h < 1) return `${Math.round(ms / (60 * 1000))}m`;
-  return `${h.toFixed(1)}h`;
 }
 
 function tone(acc: number, hasData: boolean): string {
@@ -280,7 +214,6 @@ export default function AdminStudentDetailPage() {
   const { student, stats, journey } = data;
   const national = stats.mastery.filter((m) => m.group === "National");
   const state = stats.mastery.filter((m) => m.group === "State");
-  const coverage = stats.mastery.filter((m) => m.total > 0).length;
   const showQuestionOnlyNote =
     stats.totalAttempts > 0 && stats.totalFinishedSessions === 0;
 
@@ -316,50 +249,17 @@ export default function AdminStudentDetailPage() {
 
       {showQuestionOnlyNote && (
         <div className="rounded-xl border border-warn/40 bg-warn/10 px-4 py-3 text-sm text-ink-muted leading-relaxed">
-          {QUESTION_ONLY_NOTE} Readiness and accuracy reflect every question
-          answered (including smoke or partial runs), not a finished test score.
+          {QUESTION_ONLY_NOTE} See <strong>Lifetime</strong> vs{" "}
+          <strong>Finished test scores</strong> below for the full picture.
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard
-          label="Readiness"
-          value={`${stats.readinessScore}%`}
-          toneCls={tone(stats.readinessScore, stats.totalAttempts > 0)}
-          hint={showQuestionOnlyNote ? "Estimate from question attempts" : undefined}
-        />
-        <StatCard
-          label="Lifetime question accuracy"
-          sublabel="(all attempts)"
-          value={stats.totalAttempts ? `${stats.overallAccuracy}%` : "—"}
-          toneCls={tone(stats.overallAccuracy, stats.totalAttempts > 0)}
-          hint={showQuestionOnlyNote ? QUESTION_ONLY_NOTE : undefined}
-        />
-        <StatCard
-          label="Section coverage"
-          sublabel="(sections with attempts)"
-          value={`${coverage}/${stats.mastery.length}`}
-        />
-        <StatCard
-          label="Open mistakes"
-          value={stats.unresolvedMistakes}
-          toneCls={stats.unresolvedMistakes > 0 ? "text-warn" : "text-ink"}
-        />
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard
-          label="Questions attempted"
-          sublabel="(lifetime)"
-          value={stats.totalAttempts}
-        />
-        <StatCard
-          label="7-day question accuracy"
-          value={stats.totalAttempts ? `${stats.sevenDayAccuracy}%` : "—"}
-        />
-        <StatCard label="Active days (30d)" value={stats.activeDaysLast30} />
-        <StatCard label="Study time (30d)" value={fmtHours(stats.studyMsLast30)} />
-      </div>
+      <StudentHeadlineMetrics
+        stats={stats}
+        journey={journey}
+        sessions={sessions}
+        showQuestionOnlyNote={showQuestionOnlyNote}
+      />
 
       <Card>
         <CardHeader>
@@ -373,7 +273,10 @@ export default function AdminStudentDetailPage() {
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {(Object.keys(MODE_LABELS) as ModeKey[]).map((m) => {
-              const series = journey.perMode?.[m];
+              const series =
+                m === "final"
+                  ? undefined
+                  : journey.perMode[m as JourneyMode];
               const sessionStatus =
                 stats.modeSessionStatus?.[m] ?? { finished: 0, partial: 0 };
               const latest = series?.latest ?? null;
@@ -554,43 +457,6 @@ function BackLink() {
     >
       ← Back to students
     </Link>
-  );
-}
-
-function StatCard({
-  label,
-  sublabel,
-  value,
-  toneCls,
-  hint,
-}: {
-  label: string;
-  sublabel?: string;
-  value: number | string;
-  toneCls?: string;
-  hint?: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className={cn("text-2xl font-serif font-semibold tabular-nums", toneCls ?? "text-ink")}>
-          {value}
-        </div>
-        <div className="text-xs text-ink-muted mt-1 uppercase tracking-wide">
-          {label}
-          {sublabel && (
-            <span className="normal-case tracking-normal block text-[10px] mt-0.5">
-              {sublabel}
-            </span>
-          )}
-        </div>
-        {hint && (
-          <p className="text-[10px] text-ink-muted mt-2 leading-snug normal-case tracking-normal">
-            {hint}
-          </p>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 

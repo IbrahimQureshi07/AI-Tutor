@@ -78,6 +78,19 @@ type DetailResponse = {
   };
 };
 
+type SessionHistoryRow = {
+  id: string;
+  mode: ModeKey;
+  runType: string;
+  status: "in_progress" | "finished" | "abandoned";
+  startedAt: string;
+  finishedAt: string | null;
+  scorePct: number | null;
+  answered: number;
+  total: number;
+  durationMs: number | null;
+};
+
 const MODE_LABELS: Record<ModeKey, string> = {
   assessment: "Assessment",
   practice: "Practice",
@@ -115,6 +128,38 @@ function ModeStatusBadges({ status }: { status: ModeSessionStatus }) {
   );
 }
 
+function fmtDateTime(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function fmtDurationMs(ms: number | null): string {
+  if (!ms || ms <= 0) return "—";
+  const sec = Math.floor(ms / 1000);
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function sessionStatusVariant(
+  status: SessionHistoryRow["status"],
+): "success" | "warn" | "outline" {
+  if (status === "finished") return "success";
+  if (status === "in_progress") return "warn";
+  return "outline";
+}
+
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -150,6 +195,8 @@ export default function AdminStudentDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
   const [data, setData] = React.useState<DetailResponse | null>(null);
+  const [sessions, setSessions] = React.useState<SessionHistoryRow[]>([]);
+  const [sessionsLoading, setSessionsLoading] = React.useState(true);
   const [loading, setLoading] = React.useState(true);
   const [downloading, setDownloading] = React.useState(false);
 
@@ -189,18 +236,27 @@ export default function AdminStudentDetailPage() {
     let cancelled = false;
     (async () => {
       setLoading(true);
+      setSessionsLoading(true);
       try {
-        const res = await fetch(`/api/admin/students/${id}`, {
-          cache: "no-store",
-        });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          toast.error(json.error ?? "Could not load student.");
+        const [detailRes, sessionsRes] = await Promise.all([
+          fetch(`/api/admin/students/${id}`, { cache: "no-store" }),
+          fetch(`/api/admin/students/${id}/sessions`, { cache: "no-store" }),
+        ]);
+        const detailJson = await detailRes.json().catch(() => ({}));
+        const sessionsJson = await sessionsRes.json().catch(() => ({}));
+        if (!detailRes.ok) {
+          toast.error(detailJson.error ?? "Could not load student.");
           return;
         }
-        if (!cancelled) setData(json as DetailResponse);
+        if (!cancelled) setData(detailJson as DetailResponse);
+        if (sessionsRes.ok && !cancelled) {
+          setSessions((sessionsJson.sessions ?? []) as SessionHistoryRow[]);
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setSessionsLoading(false);
+        }
       }
     })();
     return () => {
@@ -319,7 +375,6 @@ export default function AdminStudentDetailPage() {
               const series = journey.perMode?.[m];
               const sessionStatus =
                 stats.modeSessionStatus?.[m] ?? { finished: 0, partial: 0 };
-              const finished = sessionStatus.finished;
               const latest = series?.latest ?? null;
               const best = series?.best ?? null;
               return (
@@ -349,6 +404,95 @@ export default function AdminStudentDetailPage() {
               );
             })}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Session history</CardTitle>
+          <p className="text-xs text-ink-muted">
+            Every exam run — click a row for question-level detail.
+          </p>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          {sessionsLoading ? (
+            <p className="text-sm text-ink-muted">Loading sessions…</p>
+          ) : sessions.length === 0 ? (
+            <p className="text-sm text-ink-muted">No sessions yet.</p>
+          ) : (
+            <table className="w-full min-w-[720px] text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs text-ink-muted uppercase tracking-wide">
+                  <th className="pb-2 pr-3 font-medium">Date</th>
+                  <th className="pb-2 pr-3 font-medium">Mode</th>
+                  <th className="pb-2 pr-3 font-medium">Type</th>
+                  <th className="pb-2 pr-3 font-medium">Status</th>
+                  <th className="pb-2 pr-3 font-medium">Score</th>
+                  <th className="pb-2 pr-3 font-medium">Answered</th>
+                  <th className="pb-2 font-medium">Duration</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sessions.map((row) => (
+                  <tr
+                    key={row.id}
+                    className="border-b border-border/60 hover:bg-elevated/50 transition-colors"
+                  >
+                    <td className="py-2.5 pr-3">
+                      <Link
+                        href={`/admin/students/${id}/sessions/${row.id}`}
+                        className="text-ink hover:text-primary block"
+                      >
+                        {fmtDateTime(row.startedAt)}
+                      </Link>
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <Link
+                        href={`/admin/students/${id}/sessions/${row.id}`}
+                        className="text-ink hover:text-primary"
+                      >
+                        {MODE_LABELS[row.mode] ?? row.mode}
+                      </Link>
+                    </td>
+                    <td className="py-2.5 pr-3 capitalize text-ink-muted">
+                      {row.runType === "unknown" ? "—" : row.runType}
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <Badge
+                        variant={sessionStatusVariant(row.status)}
+                        className="text-[10px]"
+                      >
+                        {row.status.replace("_", " ")}
+                      </Badge>
+                    </td>
+                    <td className="py-2.5 pr-3 tabular-nums">
+                      <Link
+                        href={`/admin/students/${id}/sessions/${row.id}`}
+                        className={cn(
+                          "hover:text-primary",
+                          row.scorePct != null && row.scorePct >= 70
+                            ? "text-success font-semibold"
+                            : row.scorePct != null
+                              ? "text-warn font-semibold"
+                              : "text-ink-muted",
+                        )}
+                      >
+                        {row.scorePct != null ? `${row.scorePct}%` : "—"}
+                      </Link>
+                    </td>
+                    <td className="py-2.5 pr-3 tabular-nums text-ink-muted">
+                      {row.total > 0
+                        ? `${row.answered}/${row.total}`
+                        : `${row.answered}/—`}
+                    </td>
+                    <td className="py-2.5 tabular-nums text-ink-muted">
+                      {fmtDurationMs(row.durationMs)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </CardContent>
       </Card>
 

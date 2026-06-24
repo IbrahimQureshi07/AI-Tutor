@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { StudentAttemptLogPanel } from "@/components/admin/student-attempt-log-panel";
 
 type SectionMastery = {
   code: string;
@@ -495,6 +496,8 @@ export default function AdminStudentDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      <StudentAttemptLogPanel studentId={id!} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionMasteryCard

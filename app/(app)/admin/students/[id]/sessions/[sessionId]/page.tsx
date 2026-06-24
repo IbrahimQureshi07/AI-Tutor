@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { SECTIONS } from "@/lib/constants";
 
 type SessionDetail = {
   id: string;
@@ -79,6 +80,9 @@ export default function AdminSessionDetailPage() {
   const sessionId = params?.sessionId;
   const [session, setSession] = React.useState<SessionDetail | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [sectionFilter, setSectionFilter] = React.useState("all");
+  const [resultFilter, setResultFilter] = React.useState("all");
+  const [primaryOnly, setPrimaryOnly] = React.useState(false);
 
   React.useEffect(() => {
     if (!studentId || !sessionId) return;
@@ -105,6 +109,18 @@ export default function AdminSessionDetailPage() {
     };
   }, [studentId, sessionId]);
 
+  const filteredAttempts = React.useMemo(() => {
+    if (!session) return [];
+    let list = session.attempts;
+    if (primaryOnly) list = list.filter((a) => !a.isSibling);
+    if (sectionFilter !== "all") {
+      list = list.filter((a) => a.sectionCode === sectionFilter);
+    }
+    if (resultFilter === "correct") list = list.filter((a) => a.isCorrect);
+    if (resultFilter === "wrong") list = list.filter((a) => !a.isCorrect);
+    return list;
+  }, [session, primaryOnly, sectionFilter, resultFilter]);
+
   if (loading) {
     return <p className="text-sm text-ink-muted">Loading session…</p>;
   }
@@ -124,6 +140,9 @@ export default function AdminSessionDetailPage() {
   }
 
   const wrong = session.attempts.filter((a) => !a.isCorrect && !a.isSibling).length;
+
+  const selectCls =
+    "h-9 rounded-md border border-input bg-background px-2 text-sm w-full";
 
   return (
     <div className="space-y-6">
@@ -164,33 +183,81 @@ export default function AdminSessionDetailPage() {
         <CardHeader>
           <CardTitle>Question attempts</CardTitle>
           <p className="text-xs text-ink-muted">
-            {session.attempts.length} row{session.attempts.length !== 1 ? "s" : ""} ·{" "}
-            {wrong} wrong (primary)
+            {session.attempts.length} total · {wrong} wrong (primary) ·{" "}
+            {MODE_LABELS[session.mode] ?? session.mode} · {session.runType} run
           </p>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
-          {session.attempts.length === 0 ? (
-            <p className="text-sm text-ink-muted">No attempts recorded.</p>
+        <CardContent className="space-y-4 overflow-x-auto">
+          <div className="grid gap-2 sm:grid-cols-3 max-w-xl">
+            <label className="space-y-1">
+              <span className="text-[10px] uppercase tracking-wide text-ink-muted">
+                Section
+              </span>
+              <select
+                value={sectionFilter}
+                onChange={(e) => setSectionFilter(e.target.value)}
+                className={selectCls}
+              >
+                <option value="all">All sections</option>
+                {SECTIONS.map((s) => (
+                  <option key={s.code} value={s.code}>
+                    {s.code}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className="text-[10px] uppercase tracking-wide text-ink-muted">
+                Result
+              </span>
+              <select
+                value={resultFilter}
+                onChange={(e) => setResultFilter(e.target.value)}
+                className={selectCls}
+              >
+                <option value="all">All</option>
+                <option value="correct">Correct</option>
+                <option value="wrong">Wrong</option>
+              </select>
+            </label>
+            <label className="flex items-end gap-2 pb-1">
+              <input
+                type="checkbox"
+                checked={primaryOnly}
+                onChange={(e) => setPrimaryOnly(e.target.checked)}
+                className="rounded border-input"
+              />
+              <span className="text-xs text-ink-muted">Primary only</span>
+            </label>
+          </div>
+
+          <p className="text-xs text-ink-muted">
+            Showing {filteredAttempts.length} of {session.attempts.length}
+          </p>
+
+          {filteredAttempts.length === 0 ? (
+            <p className="text-sm text-ink-muted">No attempts match these filters.</p>
           ) : (
-            <table className="w-full min-w-[640px] text-sm">
+            <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-ink-muted uppercase tracking-wide">
-                  <th className="pb-2 pr-3 font-medium">Section</th>
                   <th className="pb-2 pr-3 font-medium">Question</th>
+                  <th className="pb-2 pr-3 font-medium w-16">Section</th>
                   <th className="pb-2 pr-3 font-medium w-16">Answer</th>
                   <th className="pb-2 pr-3 font-medium w-16">Key</th>
                   <th className="pb-2 pr-3 font-medium w-20">Result</th>
-                  <th className="pb-2 font-medium w-24">Type</th>
+                  <th className="pb-2 pr-3 font-medium w-24">Type</th>
+                  <th className="pb-2 font-medium w-28">Date</th>
                 </tr>
               </thead>
               <tbody>
-                {session.attempts.map((a) => (
+                {filteredAttempts.map((a) => (
                   <tr key={a.id} className="border-b border-border/60 align-top">
-                    <td className="py-2.5 pr-3 font-medium text-primary tabular-nums">
-                      {a.sectionCode}
-                    </td>
                     <td className="py-2.5 pr-3 text-ink max-w-md">
                       <span className="line-clamp-2">{a.promptPreview}</span>
+                    </td>
+                    <td className="py-2.5 pr-3 font-medium text-primary tabular-nums">
+                      {a.sectionCode}
                     </td>
                     <td className="py-2.5 pr-3 tabular-nums">{a.userAnswer ?? "—"}</td>
                     <td className="py-2.5 pr-3 tabular-nums">{a.correctOption}</td>
@@ -202,8 +269,11 @@ export default function AdminSessionDetailPage() {
                         {a.isCorrect ? "correct" : "wrong"}
                       </Badge>
                     </td>
-                    <td className="py-2.5 text-xs text-ink-muted">
+                    <td className="py-2.5 pr-3 text-xs text-ink-muted">
                       {a.isSibling ? "extra try" : a.hinted ? "hinted" : "primary"}
+                    </td>
+                    <td className="py-2.5 text-xs text-ink-muted whitespace-nowrap">
+                      {fmtDateTime(a.createdAt)}
                     </td>
                   </tr>
                 ))}

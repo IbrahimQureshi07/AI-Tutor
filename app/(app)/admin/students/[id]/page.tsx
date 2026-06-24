@@ -20,6 +20,8 @@ type SectionMastery = {
 
 type ModeKey = "assessment" | "practice" | "mistakes" | "mock" | "final";
 
+type ModeSessionStatus = { finished: number; partial: number };
+
 type Stats = {
   totalAttempts: number;
   totalCorrect: number;
@@ -36,6 +38,8 @@ type Stats = {
   activeDaysLast30: number;
   studyMsLast30: number;
   modeTotals: Record<ModeKey, number>;
+  modeSessionStatus: Record<ModeKey, ModeSessionStatus>;
+  totalFinishedSessions: number;
   bestMockScore: number | null;
   lastMockScore: number | null;
   lastPracticeScore: number | null;
@@ -81,6 +85,21 @@ const MODE_LABELS: Record<ModeKey, string> = {
   mock: "Mock Exam",
   final: "Final Test",
 };
+
+const QUESTION_ONLY_NOTE =
+  "Based on individual question attempts — no completed exam session yet.";
+
+function modeStatusLabel(status: ModeSessionStatus): string {
+  const parts: string[] = [];
+  if (status.finished > 0) {
+    parts.push(`${status.finished} finished`);
+  }
+  if (status.partial > 0) {
+    parts.push(`${status.partial} in progress / partial`);
+  }
+  if (parts.length === 0) return "no sessions";
+  return parts.join(" · ");
+}
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
@@ -191,6 +210,8 @@ export default function AdminStudentDetailPage() {
   const national = stats.mastery.filter((m) => m.group === "National");
   const state = stats.mastery.filter((m) => m.group === "State");
   const coverage = stats.mastery.filter((m) => m.total > 0).length;
+  const showQuestionOnlyNote =
+    stats.totalAttempts > 0 && stats.totalFinishedSessions === 0;
 
   return (
     <div className="space-y-6">
@@ -222,18 +243,32 @@ export default function AdminStudentDetailPage() {
         </div>
       </div>
 
+      {showQuestionOnlyNote && (
+        <div className="rounded-xl border border-warn/40 bg-warn/10 px-4 py-3 text-sm text-ink-muted leading-relaxed">
+          {QUESTION_ONLY_NOTE} Readiness and accuracy reflect every question
+          answered (including smoke or partial runs), not a finished test score.
+        </div>
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard
           label="Readiness"
           value={`${stats.readinessScore}%`}
           toneCls={tone(stats.readinessScore, stats.totalAttempts > 0)}
+          hint={showQuestionOnlyNote ? "Estimate from question attempts" : undefined}
         />
         <StatCard
-          label="Overall accuracy"
+          label="Lifetime question accuracy"
+          sublabel="(all attempts)"
           value={stats.totalAttempts ? `${stats.overallAccuracy}%` : "—"}
           toneCls={tone(stats.overallAccuracy, stats.totalAttempts > 0)}
+          hint={showQuestionOnlyNote ? QUESTION_ONLY_NOTE : undefined}
         />
-        <StatCard label="Coverage" value={`${coverage}/${stats.mastery.length}`} />
+        <StatCard
+          label="Section coverage"
+          sublabel="(sections with attempts)"
+          value={`${coverage}/${stats.mastery.length}`}
+        />
         <StatCard
           label="Open mistakes"
           value={stats.unresolvedMistakes}
@@ -242,8 +277,15 @@ export default function AdminStudentDetailPage() {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="Total attempts" value={stats.totalAttempts} />
-        <StatCard label="7-day accuracy" value={`${stats.sevenDayAccuracy}%`} />
+        <StatCard
+          label="Questions attempted"
+          sublabel="(lifetime)"
+          value={stats.totalAttempts}
+        />
+        <StatCard
+          label="7-day question accuracy"
+          value={stats.totalAttempts ? `${stats.sevenDayAccuracy}%` : "—"}
+        />
         <StatCard label="Active days (30d)" value={stats.activeDaysLast30} />
         <StatCard label="Study time (30d)" value={fmtHours(stats.studyMsLast30)} />
       </div>
@@ -251,37 +293,45 @@ export default function AdminStudentDetailPage() {
       <Card>
         <CardHeader>
           <CardTitle>Mode progress</CardTitle>
+          <p className="text-xs text-ink-muted leading-relaxed">
+            <strong>Finished</strong> = completed exam session with a score.{" "}
+            <strong>In progress / partial</strong> = started but not finished
+            (smoke runs, abandoned, or incomplete).
+          </p>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {(Object.keys(MODE_LABELS) as ModeKey[]).map((m) => {
               const series = journey.perMode?.[m];
-              const completed = stats.modeTotals?.[m] ?? 0;
+              const sessionStatus =
+                stats.modeSessionStatus?.[m] ?? { finished: 0, partial: 0 };
+              const finished = sessionStatus.finished;
               const latest = series?.latest ?? null;
               const best = series?.best ?? null;
+              const hasFinished = finished > 0;
               return (
                 <div
                   key={m}
                   className="rounded-xl border border-border p-3 space-y-2"
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-medium">{MODE_LABELS[m]}</span>
                     <Badge
-                      variant={completed > 0 ? "success" : "outline"}
-                      className="text-[10px]"
+                      variant={hasFinished ? "success" : sessionStatus.partial > 0 ? "warn" : "outline"}
+                      className="text-[10px] shrink-0"
                     >
-                      {completed > 0 ? `${completed} done` : "not started"}
+                      {modeStatusLabel(sessionStatus)}
                     </Badge>
                   </div>
                   <div className="flex items-center gap-4 text-xs text-ink-muted">
                     <span>
-                      Latest:{" "}
+                      Latest finished:{" "}
                       <span className={cn("font-semibold", tone(latest ?? 0, latest != null))}>
                         {latest != null ? `${latest}%` : "—"}
                       </span>
                     </span>
                     <span>
-                      Best:{" "}
+                      Best finished:{" "}
                       <span className="font-semibold text-ink">
                         {best != null ? `${best}%` : "—"}
                       </span>
@@ -295,8 +345,16 @@ export default function AdminStudentDetailPage() {
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SectionMasteryCard title="National sections" rows={national} />
-        <SectionMasteryCard title="State sections" rows={state} />
+        <SectionMasteryCard
+          title="National sections"
+          subtitle="Accuracy from individual question attempts (any mode)"
+          rows={national}
+        />
+        <SectionMasteryCard
+          title="State sections"
+          subtitle="Accuracy from individual question attempts (any mode)"
+          rows={state}
+        />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -346,12 +404,16 @@ function BackLink() {
 
 function StatCard({
   label,
+  sublabel,
   value,
   toneCls,
+  hint,
 }: {
   label: string;
+  sublabel?: string;
   value: number | string;
   toneCls?: string;
+  hint?: string;
 }) {
   return (
     <Card>
@@ -361,7 +423,17 @@ function StatCard({
         </div>
         <div className="text-xs text-ink-muted mt-1 uppercase tracking-wide">
           {label}
+          {sublabel && (
+            <span className="normal-case tracking-normal block text-[10px] mt-0.5">
+              {sublabel}
+            </span>
+          )}
         </div>
+        {hint && (
+          <p className="text-[10px] text-ink-muted mt-2 leading-snug normal-case tracking-normal">
+            {hint}
+          </p>
+        )}
       </CardContent>
     </Card>
   );
@@ -369,15 +441,20 @@ function StatCard({
 
 function SectionMasteryCard({
   title,
+  subtitle,
   rows,
 }: {
   title: string;
+  subtitle?: string;
   rows: SectionMastery[];
 }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
+        {subtitle && (
+          <p className="text-xs text-ink-muted">{subtitle}</p>
+        )}
       </CardHeader>
       <CardContent className="space-y-3">
         {rows.map((r) => (

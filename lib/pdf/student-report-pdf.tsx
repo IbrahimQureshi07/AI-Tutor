@@ -87,6 +87,16 @@ const s = StyleSheet.create({
   },
   statValue: { fontSize: 16, fontFamily: "Helvetica-Bold", color: C.ink },
   statLabel: { fontSize: 7, color: C.inkMuted, marginTop: 2, textAlign: "center" },
+  statSublabel: { fontSize: 6, color: C.inkMuted, marginTop: 1, textAlign: "center" },
+  noteBox: {
+    backgroundColor: "#FDF7EC",
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#E8D0A0",
+    padding: 10,
+    marginBottom: 12,
+  },
+  noteText: { fontSize: 7.5, color: C.inkMuted, lineHeight: 1.45 },
 
   modeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
   modeCard: {
@@ -220,6 +230,14 @@ const MODE_LABELS: Record<string, string> = {
   final: "Final Test",
 };
 
+function modeStatusLabel(status: { finished: number; partial: number }): string {
+  const parts: string[] = [];
+  if (status.finished > 0) parts.push(`${status.finished} finished`);
+  if (status.partial > 0) parts.push(`${status.partial} partial`);
+  if (parts.length === 0) return "no sessions";
+  return parts.join(" · ");
+}
+
 export interface StudentReportPdfProps {
   student: {
     fullName: string | null;
@@ -299,6 +317,8 @@ export function StudentReportPdf({
   const state = stats.mastery.filter((m) => m.group === "State");
   const coverage = stats.mastery.filter((m) => m.total > 0).length;
   const hasData = stats.totalAttempts > 0;
+  const showQuestionOnlyNote =
+    hasData && (stats.totalFinishedSessions ?? 0) === 0;
 
   const modes: Array<"assessment" | "practice" | "mistakes" | "mock" | "final"> = [
     "assessment",
@@ -331,18 +351,31 @@ export function StudentReportPdf({
 
         <View style={s.body}>
           <Text style={s.sectionTitle}>Performance Overview</Text>
+          {showQuestionOnlyNote && (
+            <View style={s.noteBox}>
+              <Text style={s.noteText}>
+                Readiness and accuracy are based on individual question attempts
+                — no completed exam session yet. Scores include smoke or partial
+                runs, not a finished test result.
+              </Text>
+            </View>
+          )}
           <View style={s.statsRow}>
             <View style={s.statCard}>
               <Text style={[s.statValue, { color: accColor(stats.readinessScore, hasData) }]}>
                 {stats.readinessScore}%
               </Text>
               <Text style={s.statLabel}>Readiness</Text>
+              {showQuestionOnlyNote && (
+                <Text style={s.statSublabel}>from question attempts</Text>
+              )}
             </View>
             <View style={s.statCard}>
               <Text style={[s.statValue, { color: accColor(stats.overallAccuracy, hasData) }]}>
                 {hasData ? `${stats.overallAccuracy}%` : "—"}
               </Text>
-              <Text style={s.statLabel}>Overall{"\n"}Accuracy</Text>
+              <Text style={s.statLabel}>Lifetime Question{"\n"}Accuracy</Text>
+              <Text style={s.statSublabel}>(all attempts)</Text>
             </View>
             <View style={s.statCard}>
               <Text style={s.statValue}>{coverage}/{stats.mastery.length}</Text>
@@ -359,13 +392,14 @@ export function StudentReportPdf({
           <View style={s.statsRow}>
             <View style={s.statCard}>
               <Text style={s.statValue}>{stats.totalAttempts}</Text>
-              <Text style={s.statLabel}>Total{"\n"}Attempts</Text>
+              <Text style={s.statLabel}>Questions{"\n"}Attempted</Text>
+              <Text style={s.statSublabel}>(lifetime)</Text>
             </View>
             <View style={s.statCard}>
               <Text style={[s.statValue, { color: accColor(stats.sevenDayAccuracy, hasData) }]}>
-                {stats.sevenDayAccuracy}%
+                {hasData ? `${stats.sevenDayAccuracy}%` : "—"}
               </Text>
-              <Text style={s.statLabel}>7-Day{"\n"}Accuracy</Text>
+              <Text style={s.statLabel}>7-Day Question{"\n"}Accuracy</Text>
             </View>
             <View style={s.statCard}>
               <Text style={s.statValue}>{stats.activeDaysLast30}</Text>
@@ -378,10 +412,14 @@ export function StudentReportPdf({
           </View>
 
           <Text style={s.sectionTitle}>Mode Progress</Text>
+          <Text style={[s.noteText, { marginBottom: 8 }]}>
+            Finished = completed session with score. Partial = started but not finished.
+          </Text>
           <View style={s.modeGrid}>
             {modes.map((m) => {
               const color = modeColor(m);
-              const completed = stats.modeTotals?.[m] ?? 0;
+              const sessionStatus =
+                stats.modeSessionStatus?.[m] ?? { finished: 0, partial: 0 };
               const series = m === "final" ? undefined : journey.perMode?.[m];
               const latest = series?.latest ?? (m === "mock" ? stats.lastMockScore : null);
               const best = series?.best ?? (m === "mock" ? stats.bestMockScore : null);
@@ -389,17 +427,17 @@ export function StudentReportPdf({
                 <View key={m} style={s.modeCard}>
                   <View style={[s.modeHeader, { backgroundColor: color }]}>
                     <Text style={s.modeTitle}>{MODE_LABELS[m]}</Text>
-                    <Text style={s.modeCount}>{completed} done</Text>
+                    <Text style={s.modeCount}>{modeStatusLabel(sessionStatus)}</Text>
                   </View>
                   <View style={s.modeBody}>
                     <View style={s.modeStatRow}>
-                      <Text style={s.modeStatLabel}>Latest</Text>
+                      <Text style={s.modeStatLabel}>Latest finished</Text>
                       <Text style={[s.modeStatValue, { color: accColor(latest ?? 0, latest != null) }]}>
                         {latest != null ? `${latest}%` : "—"}
                       </Text>
                     </View>
                     <View style={s.modeStatRow}>
-                      <Text style={s.modeStatLabel}>Best</Text>
+                      <Text style={s.modeStatLabel}>Best finished</Text>
                       <Text style={[s.modeStatValue, { color: C.ink }]}>
                         {best != null ? `${best}%` : "—"}
                       </Text>
@@ -411,6 +449,9 @@ export function StudentReportPdf({
           </View>
 
           <Text style={s.sectionTitle}>Section-by-Section Breakdown</Text>
+          <Text style={[s.noteText, { marginBottom: 8 }]}>
+            Per-section accuracy from individual question attempts (any mode).
+          </Text>
           <SectionTable title="National Section" rows={national} accent={C.national} accentLight={C.nationalLight} />
           <SectionTable title="SC State Section" rows={state} accent={C.state} accentLight={C.stateLight} />
 

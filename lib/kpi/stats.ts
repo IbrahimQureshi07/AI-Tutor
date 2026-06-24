@@ -19,6 +19,15 @@ export type ModeSessionTotals = {
   final: number;
 };
 
+export type ModeKey = keyof ModeSessionTotals;
+
+/** Finished vs started-but-not-completed sessions per mode. */
+export type ModeSessionStatus = {
+  finished: number;
+  /** in_progress + abandoned */
+  partial: number;
+};
+
 export type UserStats = {
   totalAttempts: number;
   totalCorrect: number;
@@ -53,6 +62,10 @@ export type UserStats = {
   activeDaysLast30: number;
   /** Count of finished sessions by mode (from recent sample, capped). */
   modeTotals: ModeSessionTotals;
+  /** Finished vs partial session counts by mode (all sessions, not capped). */
+  modeSessionStatus: Record<ModeKey, ModeSessionStatus>;
+  /** Total finished sessions across all modes. */
+  totalFinishedSessions: number;
   /** Highest finished mock score, or null. */
   bestMockScore: number | null;
   /** Most recent finished mock score, or null. */
@@ -63,6 +76,16 @@ export type UserStats = {
 
 function emptyModeTotals(): ModeSessionTotals {
   return { assessment: 0, practice: 0, mistakes: 0, mock: 0, final: 0 };
+}
+
+function emptyModeSessionStatus(): Record<ModeKey, ModeSessionStatus> {
+  return {
+    assessment: { finished: 0, partial: 0 },
+    practice: { finished: 0, partial: 0 },
+    mistakes: { finished: 0, partial: 0 },
+    mock: { finished: 0, partial: 0 },
+    final: { finished: 0, partial: 0 },
+  };
 }
 
 export async function getUserStats(
@@ -83,6 +106,7 @@ export async function getUserStats(
     { count: todayCount },
     { data: finishedRecent },
     { data: finishedModes },
+    { data: sessionStatusRows },
   ] = await Promise.all([
     supabase.from("v_user_section_mastery").select("*").eq("user_id", userId),
     supabase
@@ -130,6 +154,10 @@ export async function getUserStats(
       .eq("user_id", userId)
       .eq("status", "finished")
       .limit(2000),
+    supabase
+      .from("sessions")
+      .select("mode, status")
+      .eq("user_id", userId),
   ]);
 
   const totalAttempts = allAttempts?.length ?? 0;
@@ -246,6 +274,19 @@ export async function getUserStats(
     if (m in modeTotals) modeTotals[m] += 1;
   }
 
+  const modeSessionStatus = emptyModeSessionStatus();
+  let totalFinishedSessions = 0;
+  for (const row of (sessionStatusRows ?? []) as { mode: string; status: string }[]) {
+    const m = row.mode as ModeKey;
+    if (!(m in modeSessionStatus)) continue;
+    if (row.status === "finished") {
+      modeSessionStatus[m].finished += 1;
+      totalFinishedSessions += 1;
+    } else if (row.status === "in_progress" || row.status === "abandoned") {
+      modeSessionStatus[m].partial += 1;
+    }
+  }
+
   let studyMsLast30 = 0;
   let finishedSessionsLast30 = 0;
   const mockScores: number[] = [];
@@ -292,6 +333,8 @@ export async function getUserStats(
     studyMsLast30,
     activeDaysLast30,
     modeTotals,
+    modeSessionStatus,
+    totalFinishedSessions,
     bestMockScore,
     lastMockScore,
     lastPracticeScore,

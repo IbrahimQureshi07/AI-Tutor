@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { AdminMetricTooltip } from "@/components/admin/admin-metric-tooltip";
 
 type ModeKey = "assessment" | "practice" | "mistakes" | "mock" | "final";
 
@@ -116,7 +117,8 @@ export default function AdminHomePage() {
             Admin Console
           </h1>
           <p className="text-ink-muted mt-1">
-            Class-wide overview of student activity and readiness.
+            Class-wide overview — lifetime question accuracy vs finished exam
+            progress. Hover metrics for source details.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -139,134 +141,160 @@ export default function AdminHomePage() {
       ) : (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            <Kpi label="Students" value={data.totals.totalStudents} />
-            <Kpi label="Active (7d)" value={data.totals.activeStudents} />
-            <Kpi
-              label="Avg accuracy"
-              value={`${data.totals.avgAccuracy}%`}
-              toneCls={accTone(data.totals.avgAccuracy)}
-            />
-            <Kpi
-              label="At risk"
-              value={data.totals.atRisk}
-              toneCls={data.totals.atRisk > 0 ? "text-danger" : "text-ink"}
-            />
-            <Kpi
-              label="Open mistakes"
-              value={data.totals.totalOpenMistakes}
-              toneCls={data.totals.totalOpenMistakes > 0 ? "text-warn" : "text-ink"}
-            />
+            <AdminMetricTooltip k="cohort_students">
+              <Kpi label="Students" value={data.totals.totalStudents} />
+            </AdminMetricTooltip>
+            <AdminMetricTooltip k="active_7d">
+              <Kpi label="Active (7d)" value={data.totals.activeStudents} />
+            </AdminMetricTooltip>
+            <AdminMetricTooltip k="avg_lifetime_accuracy">
+              <Kpi
+                label="Avg lifetime question accuracy"
+                value={`${data.totals.avgAccuracy}%`}
+                toneCls={accTone(data.totals.avgAccuracy)}
+              />
+            </AdminMetricTooltip>
+            <AdminMetricTooltip k="at_risk">
+              <Kpi
+                label="At risk"
+                value={data.totals.atRisk}
+                toneCls={data.totals.atRisk > 0 ? "text-danger" : "text-ink"}
+              />
+            </AdminMetricTooltip>
+            <AdminMetricTooltip k="open_mistakes">
+              <Kpi
+                label="Open mistakes"
+                value={data.totals.totalOpenMistakes}
+                toneCls={data.totals.totalOpenMistakes > 0 ? "text-warn" : "text-ink"}
+              />
+            </AdminMetricTooltip>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Completion funnel</CardTitle>
-                <p className="text-xs text-ink-muted">
-                  How many students have finished each stage at least once.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {FUNNEL_STEPS.map((step) => {
-                  const count = data.funnel[step.key] ?? 0;
-                  const pct = data.totals.totalStudents
-                    ? Math.round((100 * count) / data.totals.totalStudents)
-                    : 0;
-                  return (
-                    <div key={step.key} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-ink">{step.label}</span>
-                        <span className="text-ink-muted tabular-nums">
-                          {count}/{data.totals.totalStudents} · {pct}%
-                        </span>
-                      </div>
-                      <div className="h-2 w-full rounded-full bg-elevated overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-primary"
-                          style={{ width: `${Math.max(2, pct)}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Best mock score distribution</CardTitle>
-                <p className="text-xs text-ink-muted">
-                  {data.mock.learners} student{data.mock.learners !== 1 ? "s" : ""} with at least one mock.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {data.mock.learners === 0 ? (
-                  <p className="text-sm text-ink-muted">No mock exams completed yet.</p>
-                ) : (
-                  MOCK_BANDS.map((band) => {
-                    const count = data.mock.buckets[band.key] ?? 0;
-                    const pct = data.mock.learners
-                      ? Math.round((100 * count) / data.mock.learners)
+            <AdminMetricTooltip k="completion_funnel" className="block h-full">
+              <Card className="h-full cursor-help">
+                <CardHeader>
+                  <CardTitle>Completion funnel (finished sessions)</CardTitle>
+                  <p className="text-xs text-ink-muted">
+                    Students who finished each stage at least once — not lifetime
+                    question accuracy.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {FUNNEL_STEPS.map((step) => {
+                    const count = data.funnel[step.key] ?? 0;
+                    const pct = data.totals.totalStudents
+                      ? Math.round((100 * count) / data.totals.totalStudents)
                       : 0;
                     return (
-                      <div key={band.key} className="space-y-1">
+                      <div key={step.key} className="space-y-1">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="text-ink">{band.label}</span>
-                          <span className="text-ink-muted tabular-nums">{count}</span>
+                          <span className="text-ink">{step.label}</span>
+                          <span className="text-ink-muted tabular-nums">
+                            {count}/{data.totals.totalStudents} · {pct}%
+                          </span>
                         </div>
                         <div className="h-2 w-full rounded-full bg-elevated overflow-hidden">
                           <div
-                            className={cn("h-full rounded-full", band.tone)}
-                            style={{ width: `${Math.max(count ? 4 : 0, pct)}%` }}
+                            className="h-full rounded-full bg-primary"
+                            style={{ width: `${Math.max(2, pct)}%` }}
                           />
                         </div>
                       </div>
                     );
-                  })
-                )}
-              </CardContent>
-            </Card>
+                  })}
+                </CardContent>
+              </Card>
+            </AdminMetricTooltip>
+
+            <AdminMetricTooltip k="mock_distribution" className="block h-full">
+              <Card className="h-full cursor-help">
+                <CardHeader>
+                  <CardTitle>Best finished mock distribution</CardTitle>
+                  <p className="text-xs text-ink-muted">
+                    Each student&apos;s highest finished mock score — partial runs
+                    excluded. {data.mock.learners} student
+                    {data.mock.learners !== 1 ? "s" : ""} with at least one
+                    finished mock.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {data.mock.learners === 0 ? (
+                    <p className="text-sm text-ink-muted">
+                      No finished mock exams yet.
+                    </p>
+                  ) : (
+                    MOCK_BANDS.map((band) => {
+                      const count = data.mock.buckets[band.key] ?? 0;
+                      const pct = data.mock.learners
+                        ? Math.round((100 * count) / data.mock.learners)
+                        : 0;
+                      return (
+                        <div key={band.key} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-ink">{band.label}</span>
+                            <span className="text-ink-muted tabular-nums">{count}</span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-elevated overflow-hidden">
+                            <div
+                              className={cn("h-full rounded-full", band.tone)}
+                              style={{ width: `${Math.max(count ? 4 : 0, pct)}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </CardContent>
+              </Card>
+            </AdminMetricTooltip>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Class performance by section</CardTitle>
-              <p className="text-xs text-ink-muted">
-                Combined accuracy across all students — spot the topics the whole class struggles with.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
-                {data.sectionPerformance.map((sec) => (
-                  <div key={sec.code} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-ink truncate pr-2">
-                        <span className="font-medium">{sec.code}</span> · {sec.title}
-                      </span>
-                      <span className={cn("font-semibold tabular-nums", accTone(sec.accuracy))}>
-                        {sec.accuracy != null ? `${sec.accuracy}%` : "—"}
-                      </span>
+          <AdminMetricTooltip k="class_section_accuracy" className="block">
+            <Card className="cursor-help">
+              <CardHeader>
+                <CardTitle>Class lifetime accuracy by section</CardTitle>
+                <p className="text-xs text-ink-muted">
+                  Combined correct ÷ total question attempts across all students
+                  per section — not finished-test scores.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
+                  {data.sectionPerformance.map((sec) => (
+                    <div key={sec.code} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-ink truncate pr-2">
+                          <span className="font-medium">{sec.code}</span> · {sec.title}
+                        </span>
+                        <span className={cn("font-semibold tabular-nums", accTone(sec.accuracy))}>
+                          {sec.accuracy != null ? `${sec.accuracy}%` : "—"}
+                        </span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-elevated overflow-hidden">
+                        {sec.accuracy != null && (
+                          <div
+                            className={cn("h-full rounded-full", barTone(sec.accuracy))}
+                            style={{ width: `${Math.max(2, sec.accuracy)}%` }}
+                          />
+                        )}
+                      </div>
+                      <div className="text-[10px] text-ink-muted">
+                        {sec.learners} learner{sec.learners !== 1 ? "s" : ""} · {sec.attempts} question attempts
+                      </div>
                     </div>
-                    <div className="h-1.5 w-full rounded-full bg-elevated overflow-hidden">
-                      {sec.accuracy != null && (
-                        <div
-                          className={cn("h-full rounded-full", barTone(sec.accuracy))}
-                          style={{ width: `${Math.max(2, sec.accuracy)}%` }}
-                        />
-                      )}
-                    </div>
-                    <div className="text-[10px] text-ink-muted">
-                      {sec.learners} learner{sec.learners !== 1 ? "s" : ""} · {sec.attempts} attempts
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </AdminMetricTooltip>
 
           <Card>
             <CardHeader>
               <CardTitle>Recently active students</CardTitle>
+              <p className="text-xs text-ink-muted">
+                Lifetime question accuracy shown — not finished test scores.
+              </p>
             </CardHeader>
             <CardContent>
               {data.recentActive.length === 0 ? (
@@ -286,12 +314,19 @@ export default function AdminHomePage() {
                         <p className="text-xs text-ink-muted truncate">{r.email ?? "—"}</p>
                       </div>
                       <div className="flex items-center gap-4 text-xs text-ink-muted shrink-0">
-                        <span>
-                          Coverage {r.coverage}/{data.totalSections}
-                        </span>
-                        <span className={cn("font-semibold tabular-nums", accTone(r.accuracy))}>
-                          {r.accuracy != null ? `${r.accuracy}%` : "—"}
-                        </span>
+                        <AdminMetricTooltip k="coverage_sections">
+                          <span className="cursor-help">
+                            Coverage {r.coverage}/{data.totalSections}
+                          </span>
+                        </AdminMetricTooltip>
+                        <AdminMetricTooltip k="lifetime_accuracy">
+                          <span className={cn("font-semibold tabular-nums cursor-help", accTone(r.accuracy))}>
+                            {r.accuracy != null ? `${r.accuracy}%` : "—"}
+                            <span className="font-normal text-ink-muted ml-1 hidden sm:inline">
+                              lifetime
+                            </span>
+                          </span>
+                        </AdminMetricTooltip>
                         <span className="w-16 text-right">{timeAgo(r.lastActive)}</span>
                       </div>
                     </Link>
@@ -316,12 +351,12 @@ function Kpi({
   toneCls?: string;
 }) {
   return (
-    <Card>
+    <Card className="h-full cursor-help">
       <CardContent className="pt-6">
         <div className={cn("text-2xl font-serif font-semibold tabular-nums", toneCls ?? "text-ink")}>
           {value}
         </div>
-        <div className="text-xs text-ink-muted mt-1 uppercase tracking-wide">
+        <div className="text-xs text-ink-muted mt-1 uppercase tracking-wide leading-snug">
           {label}
         </div>
       </CardContent>

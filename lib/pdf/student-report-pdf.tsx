@@ -8,6 +8,13 @@ import {
 } from "@react-pdf/renderer";
 import type { UserStats, SectionMastery } from "@/lib/kpi/stats";
 import type { Journey } from "@/lib/journey/load";
+import type { SessionHistoryRow } from "@/lib/admin/session-history";
+import {
+  buildFinishedTestScores,
+  buildLifetimeMetrics,
+  buildModeRunBreakdown,
+  mergeJourneyScores,
+} from "@/lib/admin/headline-metrics";
 
 /* ─── Brand colours (mirror final-pdf) ─── */
 const C = {
@@ -98,29 +105,6 @@ const s = StyleSheet.create({
   },
   noteText: { fontSize: 7.5, color: C.inkMuted, lineHeight: 1.45 },
 
-  modeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
-  modeCard: {
-    width: "31.5%",
-    backgroundColor: C.surface,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: C.border,
-    overflow: "hidden",
-  },
-  modeHeader: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  modeTitle: { fontSize: 8, fontFamily: "Helvetica-Bold", color: C.white },
-  modeCount: { fontSize: 6.5, color: "rgba(255,255,255,0.85)" },
-  modeBody: { paddingHorizontal: 8, paddingVertical: 6, gap: 3 },
-  modeStatRow: { flexDirection: "row", justifyContent: "space-between" },
-  modeStatLabel: { fontSize: 7, color: C.inkMuted },
-  modeStatValue: { fontSize: 7.5, fontFamily: "Helvetica-Bold" },
-
   sectionTable: {
     backgroundColor: C.surface,
     borderRadius: 6,
@@ -182,6 +166,60 @@ const s = StyleSheet.create({
   listVal: { fontSize: 7.5, fontFamily: "Helvetica-Bold" },
   listEmpty: { fontSize: 7.5, color: C.inkMuted, fontStyle: "italic" },
 
+  finishedRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F2EBE0",
+  },
+  finishedMode: { fontSize: 8, fontFamily: "Helvetica-Bold", color: C.ink, width: "28%" },
+  finishedMeta: { fontSize: 7, color: C.inkMuted, width: "22%" },
+  finishedScores: { flexDirection: "row", gap: 12, width: "50%", justifyContent: "flex-end" },
+  finishedScoreLabel: { fontSize: 7, color: C.inkMuted },
+  finishedScoreVal: { fontSize: 7.5, fontFamily: "Helvetica-Bold" },
+
+  breakdownRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    marginBottom: 4,
+    backgroundColor: C.lightBg,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  breakdownLeft: { flexDirection: "row", gap: 6, alignItems: "center", flex: 1 },
+  breakdownMode: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: C.ink },
+  breakdownType: {
+    fontSize: 6.5,
+    color: C.inkMuted,
+    backgroundColor: C.gray,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+    textTransform: "capitalize",
+  },
+  breakdownBadges: { flexDirection: "row", gap: 4 },
+  badgeFinished: {
+    fontSize: 6.5,
+    color: C.success,
+    backgroundColor: "#E8F3EC",
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  badgePartial: {
+    fontSize: 6.5,
+    color: C.warn,
+    backgroundColor: "#FDF4E8",
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+
   footer: {
     position: "absolute",
     bottom: 14,
@@ -211,33 +249,6 @@ function fmtMs(ms: number): string {
   return `${h.toFixed(1)}h`;
 }
 
-function modeColor(mode: string): string {
-  switch (mode) {
-    case "assessment": return C.assessment;
-    case "practice": return C.practice;
-    case "mistakes": return C.mistakes;
-    case "mock": return C.mock;
-    case "final": return C.final;
-    default: return C.primary;
-  }
-}
-
-const MODE_LABELS: Record<string, string> = {
-  assessment: "Assessment",
-  practice: "Practice",
-  mistakes: "Mistakes",
-  mock: "Mock Exam",
-  final: "Final Test",
-};
-
-function modeStatusLabel(status: { finished: number; partial: number }): string {
-  const parts: string[] = [];
-  if (status.finished > 0) parts.push(`${status.finished} finished`);
-  if (status.partial > 0) parts.push(`${status.partial} partial`);
-  if (parts.length === 0) return "no sessions";
-  return parts.join(" · ");
-}
-
 export interface StudentReportPdfProps {
   student: {
     fullName: string | null;
@@ -248,6 +259,7 @@ export interface StudentReportPdfProps {
   };
   stats: UserStats;
   journey: Journey;
+  sessions: SessionHistoryRow[];
   generatedAt?: string;
 }
 
@@ -302,6 +314,7 @@ export function StudentReportPdf({
   student,
   stats,
   journey,
+  sessions,
   generatedAt,
 }: StudentReportPdfProps) {
   const dateStr =
@@ -320,13 +333,12 @@ export function StudentReportPdf({
   const showQuestionOnlyNote =
     hasData && (stats.totalFinishedSessions ?? 0) === 0;
 
-  const modes: Array<"assessment" | "practice" | "mistakes" | "mock" | "final"> = [
-    "assessment",
-    "practice",
-    "mistakes",
-    "mock",
-    "final",
-  ];
+  const lifetime = buildLifetimeMetrics(stats, coverage);
+  const finishedScores = mergeJourneyScores(
+    buildFinishedTestScores(sessions),
+    journey,
+  );
+  const runBreakdown = buildModeRunBreakdown(sessions);
 
   return (
     <Document title="Student Report Card" author="SC Real Estate Prep" subject="Student progress report">
@@ -350,107 +362,142 @@ export function StudentReportPdf({
         </View>
 
         <View style={s.body}>
-          <Text style={s.sectionTitle}>Performance Overview</Text>
+          <Text style={s.sectionTitle}>Lifetime · All Question Attempts</Text>
+          <Text style={[s.noteText, { marginBottom: 8 }]}>
+            Every question answered — smoke, partial, or complete. Not finished exam scores.
+          </Text>
           {showQuestionOnlyNote && (
             <View style={s.noteBox}>
               <Text style={s.noteText}>
-                Readiness and accuracy are based on individual question attempts
-                — no completed exam session yet. Scores include smoke or partial
-                runs, not a finished test result.
+                No completed exam sessions yet — accuracy is from individual questions only,
+                not a finished test score.
               </Text>
             </View>
           )}
           <View style={s.statsRow}>
             <View style={s.statCard}>
-              <Text style={[s.statValue, { color: accColor(stats.readinessScore, hasData) }]}>
-                {stats.readinessScore}%
-              </Text>
-              <Text style={s.statLabel}>Readiness</Text>
-              {showQuestionOnlyNote && (
-                <Text style={s.statSublabel}>from question attempts</Text>
-              )}
+              <Text style={s.statValue}>{lifetime.totalQuestions}</Text>
+              <Text style={s.statLabel}>Questions{"\n"}Attempted</Text>
             </View>
             <View style={s.statCard}>
-              <Text style={[s.statValue, { color: accColor(stats.overallAccuracy, hasData) }]}>
-                {hasData ? `${stats.overallAccuracy}%` : "—"}
+              <Text style={[s.statValue, { color: accColor(lifetime.accuracy, hasData) }]}>
+                {hasData ? `${lifetime.accuracy}%` : "—"}
               </Text>
-              <Text style={s.statLabel}>Lifetime Question{"\n"}Accuracy</Text>
-              <Text style={s.statSublabel}>(all attempts)</Text>
+              <Text style={s.statLabel}>Lifetime{"\n"}Accuracy</Text>
+              <Text style={s.statSublabel}>{lifetime.totalCorrect} correct</Text>
+            </View>
+            <View style={s.statCard}>
+              <Text style={[s.statValue, { color: accColor(lifetime.sevenDayAccuracy, hasData) }]}>
+                {hasData ? `${lifetime.sevenDayAccuracy}%` : "—"}
+              </Text>
+              <Text style={s.statLabel}>7-Day{"\n"}Accuracy</Text>
             </View>
             <View style={s.statCard}>
               <Text style={s.statValue}>{coverage}/{stats.mastery.length}</Text>
-              <Text style={s.statLabel}>Sections{"\n"}Covered</Text>
-            </View>
-            <View style={s.statCard}>
-              <Text style={[s.statValue, { color: stats.unresolvedMistakes > 0 ? C.warn : C.ink }]}>
-                {stats.unresolvedMistakes}
-              </Text>
-              <Text style={s.statLabel}>Open{"\n"}Mistakes</Text>
+              <Text style={s.statLabel}>Section{"\n"}Coverage</Text>
             </View>
           </View>
 
           <View style={s.statsRow}>
             <View style={s.statCard}>
-              <Text style={s.statValue}>{stats.totalAttempts}</Text>
-              <Text style={s.statLabel}>Questions{"\n"}Attempted</Text>
-              <Text style={s.statSublabel}>(lifetime)</Text>
-            </View>
-            <View style={s.statCard}>
-              <Text style={[s.statValue, { color: accColor(stats.sevenDayAccuracy, hasData) }]}>
-                {hasData ? `${stats.sevenDayAccuracy}%` : "—"}
+              <Text style={[s.statValue, { color: accColor(lifetime.readinessScore, hasData) }]}>
+                {lifetime.readinessScore}%
               </Text>
-              <Text style={s.statLabel}>7-Day Question{"\n"}Accuracy</Text>
+              <Text style={s.statLabel}>Readiness{"\n"}Estimate</Text>
+              {showQuestionOnlyNote && (
+                <Text style={s.statSublabel}>from question attempts</Text>
+              )}
             </View>
             <View style={s.statCard}>
-              <Text style={s.statValue}>{stats.activeDaysLast30}</Text>
+              <Text style={[s.statValue, { color: lifetime.openMistakes > 0 ? C.warn : C.ink }]}>
+                {lifetime.openMistakes}
+              </Text>
+              <Text style={s.statLabel}>Open{"\n"}Mistakes</Text>
+            </View>
+            <View style={s.statCard}>
+              <Text style={s.statValue}>{lifetime.activeDaysLast30}</Text>
               <Text style={s.statLabel}>Active Days{"\n"}(30d)</Text>
             </View>
             <View style={s.statCard}>
-              <Text style={s.statValue}>{fmtMs(stats.studyMsLast30)}</Text>
+              <Text style={s.statValue}>{fmtMs(lifetime.studyMsLast30)}</Text>
               <Text style={s.statLabel}>Study Time{"\n"}(30d)</Text>
             </View>
           </View>
 
-          <Text style={s.sectionTitle}>Mode Progress</Text>
+          <Text style={s.sectionTitle}>Finished Test Scores</Text>
           <Text style={[s.noteText, { marginBottom: 8 }]}>
-            Finished = completed session with score. Partial = started but not finished.
+            Only sessions with status = finished. Partial or in-progress runs excluded.
           </Text>
-          <View style={s.modeGrid}>
-            {modes.map((m) => {
-              const color = modeColor(m);
-              const sessionStatus =
-                stats.modeSessionStatus?.[m] ?? { finished: 0, partial: 0 };
-              const series = m === "final" ? undefined : journey.perMode?.[m];
-              const latest = series?.latest ?? (m === "mock" ? stats.lastMockScore : null);
-              const best = series?.best ?? (m === "mock" ? stats.bestMockScore : null);
-              return (
-                <View key={m} style={s.modeCard}>
-                  <View style={[s.modeHeader, { backgroundColor: color }]}>
-                    <Text style={s.modeTitle}>{MODE_LABELS[m]}</Text>
-                    <Text style={s.modeCount}>{modeStatusLabel(sessionStatus)}</Text>
-                  </View>
-                  <View style={s.modeBody}>
-                    <View style={s.modeStatRow}>
-                      <Text style={s.modeStatLabel}>Latest finished</Text>
-                      <Text style={[s.modeStatValue, { color: accColor(latest ?? 0, latest != null) }]}>
-                        {latest != null ? `${latest}%` : "—"}
+          {(stats.totalFinishedSessions ?? 0) === 0 ? (
+            <Text style={[s.listEmpty, { marginBottom: 12 }]}>No finished exam sessions yet.</Text>
+          ) : (
+            <View style={{ marginBottom: 12 }}>
+              {finishedScores.map((row) => (
+                <View key={row.mode} style={s.finishedRow}>
+                  <Text style={s.finishedMode}>{row.label}</Text>
+                  <Text style={s.finishedMeta}>
+                    {row.finishedCount > 0
+                      ? `${row.finishedCount} finished`
+                      : "no finished runs"}
+                  </Text>
+                  <View style={s.finishedScores}>
+                    <Text style={s.finishedScoreLabel}>
+                      Latest{" "}
+                      <Text style={[s.finishedScoreVal, { color: accColor(row.latest ?? 0, row.latest != null) }]}>
+                        {row.latest != null ? `${row.latest}%` : "—"}
                       </Text>
-                    </View>
-                    <View style={s.modeStatRow}>
-                      <Text style={s.modeStatLabel}>Best finished</Text>
-                      <Text style={[s.modeStatValue, { color: C.ink }]}>
-                        {best != null ? `${best}%` : "—"}
+                    </Text>
+                    <Text style={s.finishedScoreLabel}>
+                      Best{" "}
+                      <Text style={s.finishedScoreVal}>
+                        {row.best != null ? `${row.best}%` : "—"}
                       </Text>
-                    </View>
+                    </Text>
                   </View>
                 </View>
-              );
-            })}
-          </View>
+              ))}
+            </View>
+          )}
 
-          <Text style={s.sectionTitle}>Section-by-Section Breakdown</Text>
+          <Text style={s.sectionTitle}>Session Breakdown by Mode & Type</Text>
           <Text style={[s.noteText, { marginBottom: 8 }]}>
-            Per-section accuracy from individual question attempts (any mode).
+            Run counts by mode and type (smoke, full, etc.) — finished vs partial.
+          </Text>
+          {runBreakdown.length === 0 ? (
+            <Text style={[s.listEmpty, { marginBottom: 12 }]}>No sessions recorded yet.</Text>
+          ) : (
+            <View style={{ marginBottom: 12 }}>
+              {runBreakdown.map((row) => (
+                <View key={`${row.mode}-${row.runType}`} style={s.breakdownRow}>
+                  <View style={s.breakdownLeft}>
+                    <Text style={s.breakdownMode}>{row.modeLabel}</Text>
+                    <Text style={s.breakdownType}>{row.runTypeLabel}</Text>
+                  </View>
+                  <View style={s.breakdownBadges}>
+                    {row.finished > 0 && (
+                      <Text style={s.badgeFinished}>{row.finished} finished</Text>
+                    )}
+                    {row.partial > 0 && (
+                      <Text style={s.badgePartial}>{row.partial} partial</Text>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        <View style={s.footer} fixed>
+          <Text style={s.footerText}>SC Real Estate Prep · Student Report Card</Text>
+          <Text style={s.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+        </View>
+      </Page>
+
+      <Page size="A4" style={s.page}>
+        <View style={s.body}>
+          <Text style={[s.sectionTitle, { marginTop: 18 }]}>Section-by-Section Breakdown</Text>
+          <Text style={[s.noteText, { marginBottom: 8 }]}>
+            Per-section lifetime question accuracy (any mode).
           </Text>
           <SectionTable title="National Section" rows={national} accent={C.national} accentLight={C.nationalLight} />
           <SectionTable title="SC State Section" rows={state} accent={C.state} accentLight={C.stateLight} />

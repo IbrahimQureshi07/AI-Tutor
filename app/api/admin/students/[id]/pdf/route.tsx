@@ -11,6 +11,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { isBootstrapAdminEmail } from "@/lib/auth/bootstrap-admin";
 import { getUserStats } from "@/lib/kpi/stats";
 import { loadJourney } from "@/lib/journey/load";
+import { loadSessionHistory } from "@/lib/admin/session-history";
 import { StudentReportPdf } from "@/lib/pdf/student-report-pdf";
 
 function hasMissingRoleColumns(error: unknown): boolean {
@@ -63,9 +64,10 @@ export async function GET(
 
     const fallbackAdmin = isBootstrapAdminEmail(authUser.email);
 
-    const [stats, journey] = await Promise.all([
+    const [stats, journey, sessions] = await Promise.all([
       getUserStats(id, admin),
       loadJourney(admin, id, { perModeLimit: 12, combinedLimit: 24 }),
+      loadSessionHistory(admin, id, { limit: 100 }),
     ]);
 
     const fullName =
@@ -91,6 +93,7 @@ export async function GET(
       },
       stats,
       journey,
+      sessions,
       generatedAt,
     }) as unknown as React.ReactElement<DocumentProps>;
 

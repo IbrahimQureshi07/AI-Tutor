@@ -7,8 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { AdminMetricTooltip } from "@/components/admin/admin-metric-tooltip";
+import { ADMIN_HELP, type AdminHelpKey } from "@/components/admin/admin-help-copy";
 
 type ModeKey = "assessment" | "practice" | "mistakes" | "mock" | "final";
+
+type ModeSessionStatus = { finished: number; partial: number };
 
 type StudentRow = {
   id: string;
@@ -22,6 +26,8 @@ type StudentRow = {
   totalSections: number;
   overallAccuracy: number;
   totalAttempts: number;
+  totalFinishedSessions: number;
+  modeSessionStatus: Record<ModeKey, ModeSessionStatus>;
   completed: Record<ModeKey, number>;
   bestMock: number | null;
   lastMock: number | null;
@@ -114,12 +120,14 @@ export default function AdminStudentsPage() {
     const active = rows.filter(
       (r) => r.isActive && !isInactive7d(r.lastActive),
     ).length;
-    const avgReadiness = rows.length
+    const withAttempts = rows.filter((r) => r.totalAttempts > 0);
+    const avgLifetime = withAttempts.length
       ? Math.round(
-          rows.reduce((a, r) => a + r.overallAccuracy, 0) / rows.length,
+          withAttempts.reduce((a, r) => a + r.overallAccuracy, 0) /
+            withAttempts.length,
         )
       : 0;
-    return { total, active, avgReadiness };
+    return { total, active, avgLifetime };
   }, [rows]);
 
   return (
@@ -127,14 +135,24 @@ export default function AdminStudentsPage() {
       <div>
         <h1 className="font-serif text-3xl font-semibold tracking-tight">Students</h1>
         <p className="text-ink-muted mt-1 text-sm">
-          Track activity, coverage, and progress for everyone in the program.
+          Lifetime question accuracy vs finished test scores — hover metrics for
+          source details.
         </p>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
-        <SummaryCard label="Total users" value={counts.total} />
-        <SummaryCard label="Active (7d)" value={counts.active} />
-        <SummaryCard label="Avg accuracy" value={`${counts.avgReadiness}%`} />
+        <AdminMetricTooltip k="total_users">
+          <SummaryCard label="Total users" value={counts.total} />
+        </AdminMetricTooltip>
+        <AdminMetricTooltip k="active_7d">
+          <SummaryCard label="Active (7d)" value={counts.active} />
+        </AdminMetricTooltip>
+        <AdminMetricTooltip k="avg_lifetime_accuracy">
+          <SummaryCard
+            label="Avg lifetime question accuracy"
+            value={counts.avgLifetime ? `${counts.avgLifetime}%` : "—"}
+          />
+        </AdminMetricTooltip>
       </div>
 
       <Card>
@@ -199,7 +217,7 @@ function SummaryCard({ label, value }: { label: string; value: number | string }
         <div className="text-2xl font-serif font-semibold tabular-nums text-ink">
           {value}
         </div>
-        <div className="text-xs text-ink-muted mt-1 uppercase tracking-wide">
+        <div className="text-xs text-ink-muted mt-1 uppercase tracking-wide leading-snug">
           {label}
         </div>
       </CardContent>
@@ -207,8 +225,43 @@ function SummaryCard({ label, value }: { label: string; value: number | string }
   );
 }
 
+function ModeStatusBadges({ status }: { status: ModeSessionStatus }) {
+  const hasFinished = status.finished > 0;
+  const hasPartial = status.partial > 0;
+  if (!hasFinished && !hasPartial) {
+    return (
+      <Badge variant="outline" className="text-[10px]">
+        none
+      </Badge>
+    );
+  }
+  return (
+    <div className="flex flex-wrap gap-1">
+      {hasFinished && (
+        <Badge
+          variant="success"
+          className="text-[10px]"
+          title={ADMIN_HELP.mode_finished_badge.description}
+        >
+          {status.finished} done
+        </Badge>
+      )}
+      {hasPartial && (
+        <Badge
+          variant="warn"
+          className="text-[10px]"
+          title={ADMIN_HELP.mode_partial_badge.description}
+        >
+          {status.partial} partial
+        </Badge>
+      )}
+    </div>
+  );
+}
+
 function StudentCard({ s }: { s: StudentRow }) {
   const inactive = !s.isActive || isInactive7d(s.lastActive);
+  const questionOnly = s.totalAttempts > 0 && s.totalFinishedSessions === 0;
   const accTone =
     s.totalAttempts === 0
       ? "outline"
@@ -235,6 +288,11 @@ function StudentCard({ s }: { s: StudentRow }) {
             <Badge variant={s.isActive ? "success" : "outline"} className="text-[10px]">
               {s.isActive ? "active" : "deactivated"}
             </Badge>
+            {questionOnly && (
+              <Badge variant="warn" className="text-[10px]">
+                questions only
+              </Badge>
+            )}
           </div>
           <p className="text-xs text-ink-muted truncate">{s.email ?? "—"}</p>
         </div>
@@ -247,32 +305,43 @@ function StudentCard({ s }: { s: StudentRow }) {
 
       <div className="flex flex-wrap items-center gap-2">
         {MODE_BADGES.map((m) => {
-          const done = s.completed[m.key] > 0;
+          const status = s.modeSessionStatus?.[m.key] ?? { finished: 0, partial: 0 };
           return (
-            <Badge
+            <div
               key={m.key}
-              variant={done ? "success" : "outline"}
-              className="text-[10px]"
+              className="flex items-center gap-1 rounded-lg border border-border/60 bg-elevated/20 px-2 py-1"
             >
-              {m.label}
-              {done && s.completed[m.key] > 1 ? ` ×${s.completed[m.key]}` : ""}
-            </Badge>
+              <span className="text-[10px] font-medium text-ink-muted shrink-0">
+                {m.label}
+              </span>
+              <ModeStatusBadges status={status} />
+            </div>
           );
         })}
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-        <Metric label="Coverage" value={`${s.coverageSections}/${s.totalSections}`} />
         <Metric
-          label="Accuracy"
+          label="Section coverage"
+          value={`${s.coverageSections}/${s.totalSections}`}
+          helpKey="coverage_sections"
+        />
+        <Metric
+          label="Lifetime question accuracy"
           value={s.totalAttempts ? `${s.overallAccuracy}%` : "—"}
           tone={accTone}
+          helpKey="lifetime_accuracy"
         />
-        <Metric label="Best mock" value={s.bestMock != null ? `${s.bestMock}%` : "—"} />
+        <Metric
+          label="Best mock (finished)"
+          value={s.bestMock != null ? `${s.bestMock}%` : "—"}
+          helpKey="best_mock_finished"
+        />
         <Metric
           label="Open mistakes"
           value={s.unresolvedMistakes}
           tone={s.unresolvedMistakes > 0 ? "warn" : "outline"}
+          helpKey="open_mistakes"
         />
       </div>
     </Link>
@@ -283,10 +352,12 @@ function Metric({
   label,
   value,
   tone,
+  helpKey,
 }: {
   label: string;
   value: number | string;
   tone?: "success" | "warn" | "danger" | "outline";
+  helpKey?: AdminHelpKey;
 }) {
   const toneCls =
     tone === "success"
@@ -297,9 +368,12 @@ function Metric({
           ? "text-danger"
           : "text-ink";
   return (
-    <div className="rounded-lg border border-border/70 bg-elevated/30 px-3 py-2">
+    <div
+      className="rounded-lg border border-border/70 bg-elevated/30 px-3 py-2 h-full"
+      title={helpKey ? ADMIN_HELP[helpKey].description : undefined}
+    >
       <div className={cn("text-sm font-semibold tabular-nums", toneCls)}>{value}</div>
-      <div className="text-[10px] text-ink-muted uppercase tracking-wide mt-0.5">
+      <div className="text-[10px] text-ink-muted uppercase tracking-wide mt-0.5 leading-snug">
         {label}
       </div>
     </div>

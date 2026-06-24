@@ -63,10 +63,19 @@ export async function GET() {
   type SessionAgg = {
     lastActive: string | null;
     completed: Record<ModeKey, number>;
+    modeSessionStatus: Record<ModeKey, { finished: number; partial: number }>;
+    totalFinishedSessions: number;
     bestMock: number | null;
     lastMock: number | null;
     lastMockAt: string | null;
   };
+  const emptyModeStatus = (): Record<ModeKey, { finished: number; partial: number }> => ({
+    assessment: { finished: 0, partial: 0 },
+    practice: { finished: 0, partial: 0 },
+    mistakes: { finished: 0, partial: 0 },
+    mock: { finished: 0, partial: 0 },
+    final: { finished: 0, partial: 0 },
+  });
   const emptyCompleted = (): Record<ModeKey, number> => ({
     assessment: 0,
     practice: 0,
@@ -89,6 +98,8 @@ export async function GET() {
       agg = {
         lastActive: null,
         completed: emptyCompleted(),
+        modeSessionStatus: emptyModeStatus(),
+        totalFinishedSessions: 0,
         bestMock: null,
         lastMock: null,
         lastMockAt: null,
@@ -101,6 +112,8 @@ export async function GET() {
     }
     if (s.status === "finished" && s.mode in agg.completed) {
       agg.completed[s.mode as ModeKey] += 1;
+      agg.modeSessionStatus[s.mode as ModeKey].finished += 1;
+      agg.totalFinishedSessions += 1;
       if (s.mode === "mock" && s.score_pct != null) {
         const score = Math.round(Number(s.score_pct));
         if (agg.bestMock == null || score > agg.bestMock) agg.bestMock = score;
@@ -109,6 +122,11 @@ export async function GET() {
           agg.lastMock = score;
         }
       }
+    } else if (
+      (s.status === "in_progress" || s.status === "abandoned") &&
+      s.mode in agg.modeSessionStatus
+    ) {
+      agg.modeSessionStatus[s.mode as ModeKey].partial += 1;
     }
   }
 
@@ -165,6 +183,8 @@ export async function GET() {
       totalSections,
       overallAccuracy,
       totalAttempts: mastery?.total ?? 0,
+      totalFinishedSessions: session?.totalFinishedSessions ?? 0,
+      modeSessionStatus: session?.modeSessionStatus ?? emptyModeStatus(),
       completed: session?.completed ?? emptyCompleted(),
       bestMock: session?.bestMock ?? null,
       lastMock: session?.lastMock ?? null,

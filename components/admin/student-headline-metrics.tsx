@@ -3,6 +3,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { AdminMetricTooltip } from "@/components/admin/admin-metric-tooltip";
+import type { AdminHelpKey } from "@/components/admin/admin-help-copy";
 import type { UserStats } from "@/lib/kpi/stats";
 import type { SessionHistoryRow } from "@/lib/admin/session-history";
 import {
@@ -33,14 +35,16 @@ function Metric({
   sublabel,
   value,
   toneCls,
+  helpKey,
 }: {
   label: string;
   sublabel?: string;
   value: string | number;
   toneCls?: string;
+  helpKey?: AdminHelpKey;
 }) {
-  return (
-    <div className="rounded-xl border border-border bg-surface px-3 py-3">
+  const inner = (
+    <div className="rounded-xl border border-border bg-surface px-3 py-3 cursor-help h-full">
       <div
         className={cn(
           "text-xl font-serif font-semibold tabular-nums",
@@ -59,6 +63,9 @@ function Metric({
       </div>
     </div>
   );
+
+  if (!helpKey) return inner;
+  return <AdminMetricTooltip k={helpKey}>{inner}</AdminMetricTooltip>;
 }
 
 function FinishedScoreRow({ row }: { row: FinishedTestScore }) {
@@ -119,7 +126,11 @@ export function StudentHeadlineMetrics({
     <div className="space-y-4">
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Lifetime · all question attempts</CardTitle>
+          <AdminMetricTooltip k="questions_attempted">
+            <CardTitle className="text-base cursor-help w-fit">
+              Lifetime · all question attempts
+            </CardTitle>
+          </AdminMetricTooltip>
           <p className="text-xs text-ink-muted">
             Every question answered across any session (smoke, partial, or complete).
           </p>
@@ -129,6 +140,7 @@ export function StudentHeadlineMetrics({
             <Metric
               label="Questions attempted"
               value={lifetime.totalQuestions}
+              helpKey="questions_attempted"
             />
             <Metric
               label="Lifetime accuracy"
@@ -139,6 +151,7 @@ export function StudentHeadlineMetrics({
                   : "—"
               }
               toneCls={tone(lifetime.accuracy, lifetime.totalQuestions > 0)}
+              helpKey="lifetime_accuracy"
             />
             <Metric
               label="7-day accuracy"
@@ -151,10 +164,12 @@ export function StudentHeadlineMetrics({
                 lifetime.sevenDayAccuracy,
                 lifetime.totalQuestions > 0,
               )}
+              helpKey="seven_day_accuracy"
             />
             <Metric
               label="Section coverage"
               value={`${lifetime.coverageSections}/${lifetime.totalSections}`}
+              helpKey="coverage_sections"
             />
             <Metric
               label="Open mistakes"
@@ -162,22 +177,26 @@ export function StudentHeadlineMetrics({
               toneCls={
                 lifetime.openMistakes > 0 ? "text-warn" : "text-ink"
               }
+              helpKey="open_mistakes"
             />
             <Metric
               label="Readiness estimate"
               sublabel="composite score"
               value={`${lifetime.readinessScore}%`}
               toneCls={tone(lifetime.readinessScore, lifetime.totalQuestions > 0)}
+              helpKey="readiness_estimate"
             />
             <Metric
               label="Active days"
               sublabel="last 30 days"
               value={lifetime.activeDaysLast30}
+              helpKey="active_days_30d"
             />
             <Metric
               label="Study time"
               sublabel="last 30 days"
               value={fmtHours(lifetime.studyMsLast30)}
+              helpKey="study_time_30d"
             />
           </div>
           {showQuestionOnlyNote && (
@@ -191,7 +210,11 @@ export function StudentHeadlineMetrics({
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Finished test scores</CardTitle>
+          <AdminMetricTooltip k="finished_test_scores">
+            <CardTitle className="text-base cursor-help w-fit">
+              Finished test scores
+            </CardTitle>
+          </AdminMetricTooltip>
           <p className="text-xs text-ink-muted">
             Only sessions marked <strong>finished</strong> with a score — not
             partial or in-progress runs.
@@ -214,7 +237,11 @@ export function StudentHeadlineMetrics({
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Session breakdown by mode & type</CardTitle>
+          <AdminMetricTooltip k="session_breakdown">
+            <CardTitle className="text-base cursor-help w-fit">
+              Session breakdown by mode & type
+            </CardTitle>
+          </AdminMetricTooltip>
           <p className="text-xs text-ink-muted">
             How many runs per mode and run type (smoke, full, etc.) — finished
             vs partial.

@@ -93,8 +93,11 @@ export default async function PricingPage() {
                 </Button>
               </div>
               <p className="text-xs text-center text-ink-muted">
-                Try a short free preview first — full demo flow coming on the next
-                update.
+                Not ready to buy?{" "}
+                <Link href="/try" className="text-primary hover:underline">
+                  Try 5 questions free
+                </Link>{" "}
+                — no account needed.
               </p>
             </div>
           )}

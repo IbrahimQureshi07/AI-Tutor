@@ -27,13 +27,16 @@ export default function LandingPage() {
             </p>
             <div className="mt-10 flex flex-col sm:flex-row gap-3">
               <Button asChild size="lg">
-                <Link href="/signup">
-                  Start free assessment
+                <Link href="/try">
+                  Try 5 questions free
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline">
-                <Link href="/login">I already have an account</Link>
+                <Link href="/pricing">View pricing</Link>
+              </Button>
+              <Button asChild size="lg" variant="ghost" className="sm:px-4">
+                <Link href="/login">Log in</Link>
               </Button>
             </div>
             <div id="stats" className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-2xl">
@@ -163,13 +166,22 @@ export default function LandingPage() {
               Your exam date is coming. Be ready.
             </h2>
             <p className="mt-4 text-background/80">
-              Start with a free 5-minute assessment. No credit card needed.
+              Try five real exam-style questions with a taste of the AI tutor — no
+              signup required. Unlock the full course when you&apos;re ready.
             </p>
-            <div className="mt-8">
+            <div className="mt-8 flex flex-col sm:flex-row gap-3">
               <Button asChild size="lg" className="bg-primary hover:bg-primary/90">
-                <Link href="/signup">
-                  Create free account <ArrowRight className="h-4 w-4" />
+                <Link href="/try">
+                  Try the free demo <ArrowRight className="h-4 w-4" />
                 </Link>
+              </Button>
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="border-background/30 text-background hover:bg-background/10"
+              >
+                <Link href="/pricing">View pricing</Link>
               </Button>
             </div>
           </div>

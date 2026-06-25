@@ -2,6 +2,10 @@ import { streamText, tool } from "ai";
 import { z } from "zod";
 import { getModel } from "@/lib/ai/provider";
 import { createClient } from "@/lib/supabase/server";
+import {
+  accessDeniedStreamResponse,
+  requireFullAccess,
+} from "@/lib/access/require-access";
 import { SECTIONS } from "@/lib/constants";
 import { DebriefPlanSchema } from "@/lib/coach/debrief-plan";
 
@@ -139,15 +143,8 @@ ${sectionLines || "  (none)"}
 
 export async function POST(req: Request) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return new Response(JSON.stringify({ error: "unauthorized" }), {
-      status: 401,
-      headers: { "content-type": "application/json" },
-    });
-  }
+  const guard = await requireFullAccess(supabase);
+  if (!guard.ok) return accessDeniedStreamResponse(guard);
 
   const raw = await req.json().catch(() => null);
   const parsed = Body.safeParse(raw);

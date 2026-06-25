@@ -1,21 +1,18 @@
 import { streamText } from "ai";
 import { getModel, SYSTEM_PROMPT } from "@/lib/ai/provider";
 import { createClient } from "@/lib/supabase/server";
+import {
+  accessDeniedStreamResponse,
+  requireFullAccess,
+} from "@/lib/access/require-access";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return new Response(JSON.stringify({ error: "unauthorized" }), {
-      status: 401,
-      headers: { "content-type": "application/json" },
-    });
-  }
+  const guard = await requireFullAccess(supabase);
+  if (!guard.ok) return accessDeniedStreamResponse(guard);
 
   const body = await req.json();
   const { messages, questionContext } = body as {

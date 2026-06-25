@@ -5,6 +5,10 @@ import { NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import React from "react";
 import { createClient } from "@/lib/supabase/server";
+import {
+  accessDeniedResponse,
+  requireFullAccess,
+} from "@/lib/access/require-access";
 import { buildSummary } from "@/lib/assessment/summary";
 import { OverallAssessmentPdf } from "@/lib/pdf/overall-assessment-pdf";
 import type { DocumentProps } from "@react-pdf/renderer";
@@ -13,12 +17,9 @@ export async function GET(_req: Request) {
   try {
     const supabase = await createClient();
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requireFullAccess(supabase);
+    if (!guard.ok) return accessDeniedResponse(guard);
+    const { user } = guard;
 
     /* Fetch ALL finished assessment sessions for this user */
     const { data: sessions } = await supabase

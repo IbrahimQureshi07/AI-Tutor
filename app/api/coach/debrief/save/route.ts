@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import {
+  accessDeniedResponse,
+  requireFullAccess,
+} from "@/lib/access/require-access";
 import { DebriefPlanSchema, sanitizePlan } from "@/lib/coach/debrief-plan";
 
 export const runtime = "nodejs";
@@ -19,12 +23,9 @@ const Body = z.object({
  */
 export async function POST(req: Request) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const guard = await requireFullAccess(supabase);
+  if (!guard.ok) return accessDeniedResponse(guard);
+  const { user } = guard;
 
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {

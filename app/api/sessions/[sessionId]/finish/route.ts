@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import {
+  accessDeniedResponse,
+  requireFullAccess,
+} from "@/lib/access/require-access";
 import { buildSummary } from "@/lib/assessment/summary";
 import { generateTutorLetter } from "@/lib/assessment/letter";
 
@@ -18,10 +22,9 @@ export async function POST(
 ) {
   const { sessionId } = await params;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const guard = await requireFullAccess(supabase);
+  if (!guard.ok) return accessDeniedResponse(guard);
+  const { user } = guard;
 
   const json = await request.json().catch(() => ({}));
   const parsed = Body.safeParse(json);

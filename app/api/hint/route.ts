@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { generateText } from "ai";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import {
+  accessDeniedResponse,
+  requireFullAccess,
+} from "@/lib/access/require-access";
 import { getModel } from "@/lib/ai/provider";
 
 export const runtime = "nodejs";
@@ -28,10 +32,8 @@ Style:
 
 export async function POST(req: Request) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const guard = await requireFullAccess(supabase);
+  if (!guard.ok) return accessDeniedResponse(guard);
 
   const json = await req.json().catch(() => ({}));
   const parsed = Body.safeParse(json);

@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import {
   getAccessState,
@@ -11,6 +12,32 @@ export type RequireFullAccessResult =
       reason: "unauthorized" | "payment_required";
       access?: AccessState;
     };
+
+type DeniedAccess = Extract<RequireFullAccessResult, { ok: false }>;
+
+/** JSON error for NextResponse-based API routes. */
+export function accessDeniedResponse(result: DeniedAccess): NextResponse {
+  if (result.reason === "unauthorized") {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  return NextResponse.json(
+    { error: "payment_required", unlock: "/unlock" },
+    { status: 403 },
+  );
+}
+
+/** JSON error for streaming routes that return plain Response. */
+export function accessDeniedStreamResponse(result: DeniedAccess): Response {
+  const status = result.reason === "unauthorized" ? 401 : 403;
+  const body =
+    result.reason === "unauthorized"
+      ? { error: "unauthorized" }
+      : { error: "payment_required", unlock: "/unlock" };
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
 
 /**
  * Server guard for paid app features and APIs.

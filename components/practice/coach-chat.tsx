@@ -57,6 +57,8 @@ export function CoachChat({
   onCoachUsed,
   secondsLeft,
   totalSeconds,
+  coachApiPath = "/api/practice/coach",
+  maxUserTurns = MAX_USER_TURNS,
 }: {
   questionId: string;
   questionPrompt: string;
@@ -68,6 +70,8 @@ export function CoachChat({
   /** Whole-question budget remaining (seconds), driven by parent. */
   secondsLeft: number;
   totalSeconds: number;
+  coachApiPath?: string;
+  maxUserTurns?: number;
 }) {
   // ---- Solo path — slim reminder bar; answers below stay the default ----
   if (state === "closed") {
@@ -101,6 +105,8 @@ export function CoachChat({
       secondsLeft={secondsLeft}
       totalSeconds={totalSeconds}
       locked={state === "locked"}
+      coachApiPath={coachApiPath}
+      maxUserTurns={maxUserTurns}
     />
   );
 }
@@ -308,6 +314,8 @@ function CoachConversation({
   secondsLeft,
   totalSeconds,
   locked,
+  coachApiPath,
+  maxUserTurns,
 }: {
   questionId: string;
   questionPrompt: string;
@@ -316,6 +324,8 @@ function CoachConversation({
   secondsLeft: number;
   totalSeconds: number;
   locked: boolean;
+  coachApiPath: string;
+  maxUserTurns: number;
 }) {
   const [messages, setMessages] = React.useState<Message[]>([
     {
@@ -328,7 +338,7 @@ function CoachConversation({
   ]);
   const [input, setInput] = React.useState("");
   const [sending, setSending] = React.useState(false);
-  const [remainingTurns, setRemainingTurns] = React.useState(MAX_USER_TURNS);
+  const [remainingTurns, setRemainingTurns] = React.useState(maxUserTurns);
   const usedRef = React.useRef(false);
 
   const viewportRef = React.useRef<HTMLDivElement>(null);
@@ -360,7 +370,7 @@ function CoachConversation({
     setSending(true);
 
     try {
-      const res = await fetch("/api/practice/coach", {
+      const res = await fetch(coachApiPath, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -414,7 +424,7 @@ function CoachConversation({
     );
   }, []);
 
-  const turnsUsed = MAX_USER_TURNS - remainingTurns;
+  const turnsUsed = maxUserTurns - remainingTurns;
   const turnsLow = remainingTurns <= 1;
 
   return (
@@ -457,7 +467,7 @@ function CoachConversation({
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <TurnDots used={turnsUsed} total={MAX_USER_TURNS} />
+          <TurnDots used={turnsUsed} total={maxUserTurns} />
           <TimerRing seconds={secondsLeft} total={totalSeconds} compact />
         </div>
       </div>

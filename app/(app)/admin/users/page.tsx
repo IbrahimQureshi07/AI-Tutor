@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import { UserPlus } from "lucide-react";
 
 type AdminUserRow = {
@@ -32,9 +33,13 @@ const EMPTY_CREATE: CreateFormState = {
   role: "student",
 };
 
+type Filter = "all" | "students" | "admins" | "active" | "inactive";
+
 export default function AdminUsersPage() {
   const [rows, setRows] = React.useState<AdminUserRow[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [query, setQuery] = React.useState("");
+  const [filter, setFilter] = React.useState<Filter>("all");
   const [savingId, setSavingId] = React.useState<string | null>(null);
   const [showAdd, setShowAdd] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
@@ -58,6 +63,28 @@ export default function AdminUsersPage() {
   React.useEffect(() => {
     void load();
   }, [load]);
+
+  const filtered = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (q) {
+        const hay = `${r.fullName ?? ""} ${r.email ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      switch (filter) {
+        case "students":
+          return r.role === "student";
+        case "admins":
+          return r.role === "admin";
+        case "active":
+          return r.isActive;
+        case "inactive":
+          return !r.isActive;
+        default:
+          return true;
+      }
+    });
+  }, [rows, query, filter]);
 
   async function patchUser(userId: string, patch: Partial<Pick<AdminUserRow, "role" | "isActive">>) {
     setSavingId(userId);
@@ -227,17 +254,52 @@ export default function AdminUsersPage() {
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="gap-3">
           <CardTitle>All users</CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search name or email…"
+              className="h-9 max-w-xs"
+            />
+            <div className="flex flex-wrap gap-1">
+              {(
+                [
+                  ["all", "All"],
+                  ["students", "Students"],
+                  ["admins", "Admins"],
+                  ["active", "Active"],
+                  ["inactive", "Inactive"],
+                ] as [Filter, string][]
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setFilter(key)}
+                  className={cn(
+                    "rounded-full px-3 py-1 text-xs font-medium border transition-colors",
+                    filter === key
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-ink-muted hover:bg-elevated",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
             <p className="text-sm text-ink-muted">Loading users…</p>
-          ) : rows.length === 0 ? (
-            <p className="text-sm text-ink-muted">No users found.</p>
+          ) : filtered.length === 0 ? (
+            <p className="text-sm text-ink-muted">
+              {rows.length === 0 ? "No users found." : "No matching users."}
+            </p>
           ) : (
             <div className="space-y-3">
-              {rows.map((u) => (
+              {filtered.map((u) => (
                 <div
                   key={u.id}
                   className="rounded-xl border border-border p-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_160px_140px_130px]"

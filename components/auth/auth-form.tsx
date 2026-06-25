@@ -9,14 +9,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/lib/supabase/client";
+import { isSharedDemoLoginEnabled } from "@/lib/auth/shared-demo-login";
 import { Loader2, Mail, Lock, LogIn, UserPlus, Zap } from "lucide-react";
+
+const showSharedDemoLogin = isSharedDemoLoginEnabled();
 
 type Mode = "login" | "signup";
 
 export function AuthForm({ mode }: { mode: Mode }) {
   const router = useRouter();
   const search = useSearchParams();
-  const redirectTo = search.get("redirectTo") || "/dashboard";
+  const defaultRedirect = mode === "signup" ? "/unlock" : "/dashboard";
+  const redirectTo = search.get("redirectTo") || defaultRedirect;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -29,7 +33,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const sub =
     mode === "login"
       ? "Continue your journey to the SC license."
-      : "Start your free assessment in under a minute.";
+      : "Create your account, then unlock the full course with a one-time payment.";
   const switchHref = mode === "login" ? "/signup" : "/login";
   const switchText =
     mode === "login" ? "Don't have an account?" : "Already have an account?";
@@ -167,16 +171,18 @@ export function AuthForm({ mode }: { mode: Mode }) {
         <p className="mt-1.5 text-sm text-ink-muted">{sub}</p>
       </div>
 
-      <Button
-        type="button"
-        size="lg"
-        className="w-full"
-        disabled={busy}
-        onClick={() => void handleDemo()}
-      >
-        <Zap className="h-4 w-4" />
-        Skip — try a demo account
-      </Button>
+      {showSharedDemoLogin && (
+        <Button
+          type="button"
+          size="lg"
+          className="w-full"
+          disabled={busy}
+          onClick={() => void handleDemo()}
+        >
+          <Zap className="h-4 w-4" />
+          Skip — try a demo account
+        </Button>
+      )}
 
       <Button
         type="button"

@@ -1,13 +1,30 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { getAccessState } from "@/lib/access/check-access";
 
 const PUBLIC_PATHS = [
   "/",
   "/login",
   "/signup",
+  "/pricing",
   "/auth/callback",
   "/forgot-password",
 ];
+
+/** Logged-in users without paid access may visit these routes. */
+const PAYWALL_EXEMPT_PREFIXES = ["/unlock", "/pricing", "/settings", "/admin"];
+
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATHS.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+}
+
+function isPaywallExempt(pathname: string): boolean {
+  return PAYWALL_EXEMPT_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+}
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -36,22 +53,58 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isPublic = PUBLIC_PATHS.some(
-    (p) => pathname === p || pathname.startsWith(`${p}/`),
-  );
 
-  if (!user && !isPublic && !pathname.startsWith("/_next") && !pathname.startsWith("/api/public")) {
+  if (pathname.startsWith("/api")) {
+    return response;
+  }
+
+  const isPublic = isPublicPath(pathname);
+
+  if (!user && !isPublic && !pathname.startsWith("/_next")) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(url);
   }
 
+  if (pathname === "/unlock") {
+    if (!user) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("redirectTo", "/unlock");
+      return NextResponse.redirect(url);
+    }
+    const access = await getAccessState(supabase, user);
+    if (access.hasFullAccess) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return response;
+  }
+
   if (user && (pathname === "/login" || pathname === "/signup")) {
+    const access = await getAccessState(supabase, user);
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    url.pathname = access.hasFullAccess ? "/dashboard" : "/unlock";
     url.search = "";
     return NextResponse.redirect(url);
+  }
+
+  if (
+    user &&
+    !isPublic &&
+    !isPaywallExempt(pathname) &&
+    !pathname.startsWith("/_next")
+  ) {
+    const access = await getAccessState(supabase, user);
+    if (access.migrationApplied && access.needsPaywall) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/unlock";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
   }
 
   return response;

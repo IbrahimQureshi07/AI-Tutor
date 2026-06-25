@@ -1,23 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { isSharedDemoLoginEnabled } from "@/lib/auth/shared-demo-login";
 
 /**
- * One-click demo login.
- *
- * Uses the service-role key to ensure a single pre-confirmed demo user exists,
- * then returns its credentials so the client can `signInWithPassword`.
- *
- * Why this works:
- *   - admin.createUser bypasses Supabase's signup rate limit.
- *   - email_confirm: true skips the email-send step entirely (no per-IP email
- *     rate limit hit), which is what was blocking testing.
- *   - signInWithPassword for an existing user is on a separate, much higher
- *     limit than signup/email.
- *
- * Disable in production by setting NEXT_PUBLIC_ENABLE_DEMO_LOGIN=false.
+ * One-click shared demo account login (legacy testing shortcut).
+ * Disabled by default — use guest /try demo (Step 4) for prospects instead.
+ * Local only: NEXT_PUBLIC_ENABLE_DEMO_LOGIN=true in .env.local
  */
 export async function POST() {
-  if (process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === "false") {
+  if (!isSharedDemoLoginEnabled()) {
     return NextResponse.json({ error: "Demo login disabled." }, { status: 403 });
   }
 

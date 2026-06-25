@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { maybeBootstrapAdmin } from "@/lib/auth/bootstrap-admin";
+import { getAccessState } from "@/lib/access/check-access";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/dashboard";
+  const nextParam = searchParams.get("next") ?? "/dashboard";
 
   if (code) {
     const supabase = await createClient();
@@ -16,8 +17,17 @@ export async function GET(request: Request) {
       } = await supabase.auth.getUser();
       if (user) {
         await maybeBootstrapAdmin(supabase, user);
+        const access = await getAccessState(supabase, user);
+        let next = nextParam;
+        if (!access.hasFullAccess && (next === "/dashboard" || next === "/")) {
+          next = "/unlock";
+        }
+        if (access.hasFullAccess && next === "/unlock") {
+          next = "/dashboard";
+        }
+        return NextResponse.redirect(`${origin}${next}`);
       }
-      return NextResponse.redirect(`${origin}${next}`);
+      return NextResponse.redirect(`${origin}${nextParam}`);
     }
   }
 

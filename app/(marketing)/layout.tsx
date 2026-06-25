@@ -18,13 +18,14 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             <a href="#modes" className="hover:text-ink transition-colors">Modes</a>
             <a href="#how" className="hover:text-ink transition-colors">How it works</a>
             <a href="#stats" className="hover:text-ink transition-colors">Results</a>
+            <Link href="/pricing" className="hover:text-ink transition-colors">Pricing</Link>
           </nav>
           <div className="flex items-center gap-2">
             <Button asChild variant="ghost" size="sm">
               <Link href="/login">Log in</Link>
             </Button>
             <Button asChild size="sm">
-              <Link href="/signup">Start free</Link>
+              <Link href="/pricing">View pricing</Link>
             </Button>
           </div>
         </div>

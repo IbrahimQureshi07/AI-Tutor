@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { isBootstrapAdminEmail } from "@/lib/auth/bootstrap-admin";
+import { loadAdminStudentAccess } from "@/lib/access/admin-grant";
 import { getUserStats } from "@/lib/kpi/stats";
 import { loadJourney } from "@/lib/journey/load";
 
@@ -57,10 +58,15 @@ export async function GET(
   }
 
   const fallbackAdmin = isBootstrapAdminEmail(authUser.email);
+  const role =
+    (profile?.role as "student" | "admin" | undefined) ??
+    (fallbackAdmin ? "admin" : "student");
+  const isTargetAdmin = role === "admin";
 
-  const [stats, journey] = await Promise.all([
+  const [stats, journey, access] = await Promise.all([
     getUserStats(id, admin),
     loadJourney(admin, id, { perModeLimit: 12, combinedLimit: 24 }),
+    loadAdminStudentAccess(admin, id, isTargetAdmin),
   ]);
 
   return NextResponse.json({
@@ -70,13 +76,12 @@ export async function GET(
       fullName:
         (profile?.full_name as string | null | undefined) ??
         ((authUser.user_metadata?.full_name as string | undefined) ?? null),
-      role:
-        (profile?.role as "student" | "admin" | undefined) ??
-        (fallbackAdmin ? "admin" : "student"),
+      role,
       isActive: (profile?.is_active as boolean | undefined) ?? true,
       createdAt: authUser.created_at ?? null,
       lastSignInAt: authUser.last_sign_in_at ?? null,
     },
+    access,
     stats,
     journey,
   });

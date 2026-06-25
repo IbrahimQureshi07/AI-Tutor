@@ -10,6 +10,10 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { StudentAttemptLogPanel } from "@/components/admin/student-attempt-log-panel";
 import { StudentHeadlineMetrics } from "@/components/admin/student-headline-metrics";
+import {
+  GrantAccessPanel,
+  type StudentAccessInfo,
+} from "@/components/admin/grant-access-panel";
 import type { SessionHistoryRow } from "@/lib/admin/session-history";
 import type { Journey, JourneyMode } from "@/lib/journey/load";
 import type {
@@ -29,6 +33,7 @@ type DetailResponse = {
     createdAt: string | null;
     lastSignInAt: string | null;
   };
+  access: StudentAccessInfo;
   stats: UserStats;
   journey: Journey;
 };
@@ -135,6 +140,13 @@ export default function AdminStudentDetailPage() {
   const [loading, setLoading] = React.useState(true);
   const [downloading, setDownloading] = React.useState(false);
 
+  const reloadStudent = React.useCallback(async () => {
+    if (!id) return;
+    const detailRes = await fetch(`/api/admin/students/${id}`, { cache: "no-store" });
+    const detailJson = await detailRes.json().catch(() => ({}));
+    if (detailRes.ok) setData(detailJson as DetailResponse);
+  }, [id]);
+
   const downloadPdf = React.useCallback(async () => {
     if (!id) return;
     setDownloading(true);
@@ -211,7 +223,7 @@ export default function AdminStudentDetailPage() {
     );
   }
 
-  const { student, stats, journey } = data;
+  const { student, access, stats, journey } = data;
   const national = stats.mastery.filter((m) => m.group === "National");
   const state = stats.mastery.filter((m) => m.group === "State");
   const showQuestionOnlyNote =
@@ -253,6 +265,13 @@ export default function AdminStudentDetailPage() {
           <strong>Finished test scores</strong> below for the full picture.
         </div>
       )}
+
+      <GrantAccessPanel
+        studentId={student.id}
+        studentRole={student.role}
+        access={access}
+        onUpdated={reloadStudent}
+      />
 
       <StudentHeadlineMetrics
         stats={stats}

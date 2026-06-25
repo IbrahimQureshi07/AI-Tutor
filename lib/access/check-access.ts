@@ -16,7 +16,7 @@ const ACCESS_STATUSES: AccessStatus[] = [
   "expired",
 ];
 
-function isMissingAccessColumnsError(error: unknown): boolean {
+export function isMissingAccessColumnsError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const e = error as { message?: string; details?: string };
   const msg = `${e.message ?? ""} ${e.details ?? ""}`.toLowerCase();

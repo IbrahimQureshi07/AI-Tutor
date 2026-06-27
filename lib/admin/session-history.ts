@@ -64,6 +64,50 @@ function asConfig(raw: unknown): SessionConfig {
   return raw as Record<string, unknown>;
 }
 
+const ASSESSMENT_PER_SECTION = {
+  smoke: 2,
+  quick: 15,
+  deep: 35,
+} as const;
+
+function inferAssessmentFromPerSection(
+  perSection: number,
+): SessionRunType | null {
+  if (perSection === ASSESSMENT_PER_SECTION.smoke) return "smoke";
+  if (perSection === ASSESSMENT_PER_SECTION.quick) return "quick";
+  if (perSection === ASSESSMENT_PER_SECTION.deep) return "deep";
+  return null;
+}
+
+function inferAssessmentRunType(
+  config: SessionConfig,
+  target: number | null,
+): SessionRunType | null {
+  if (typeof config?.per_section === "number") {
+    const fromPer = inferAssessmentFromPerSection(config.per_section);
+    if (fromPer) return fromPer;
+  }
+
+  const sections = config?.sections;
+  if (Array.isArray(sections) && sections.length > 0 && target != null && target > 0) {
+    const perSection = Math.round(target / sections.length);
+    const fromPer = inferAssessmentFromPerSection(perSection);
+    if (fromPer) return fromPer;
+  }
+
+  if (target == null || target <= 0) return null;
+
+  if (target <= 24) return "smoke";
+
+  for (let sectionCount = 1; sectionCount <= 12; sectionCount += 1) {
+    if (target === sectionCount * ASSESSMENT_PER_SECTION.quick) return "quick";
+    if (target === sectionCount * ASSESSMENT_PER_SECTION.deep) return "deep";
+    if (target === sectionCount * ASSESSMENT_PER_SECTION.smoke) return "smoke";
+  }
+
+  return null;
+}
+
 export function resolveSessionRunType(
   mode: string,
   config: SessionConfig,
@@ -88,6 +132,11 @@ export function resolveSessionRunType(
         ? config.question_ids.length
         : null;
 
+  if (mode === "assessment") {
+    const inferred = inferAssessmentRunType(config, target);
+    if (inferred) return inferred;
+  }
+
   if (target != null) {
     if (mode === "practice") {
       if (target === PRACTICE_SMOKE_TOTAL) return "smoke";
@@ -104,25 +153,42 @@ export function resolveSessionRunType(
       if (target === MOCK_TOTAL) return "full";
       return "custom";
     }
-    if (mode === "assessment" && target <= 24) return "smoke";
     if (mode === "final") return "full";
   }
 
   return "unknown";
 }
 
-export function sessionRunTypeLabel(type: SessionRunType): string {
+export function sessionRunTypeLabel(
+  type: SessionRunType,
+  mode?: SessionMode | string,
+): string {
+  if (type === "unknown") return "—";
+
+  if (mode === "assessment") {
+    switch (type) {
+      case "quick":
+        return "Quick check";
+      case "deep":
+        return "Deep diagnostic";
+      case "smoke":
+        return "Smoke test";
+      default:
+        break;
+    }
+  }
+
   switch (type) {
     case "smoke":
-      return "smoke";
+      return "Smoke";
     case "full":
-      return "full";
+      return "Full";
     case "custom":
-      return "custom";
+      return "Custom";
     case "quick":
-      return "quick";
+      return "Quick check";
     case "deep":
-      return "deep";
+      return "Deep diagnostic";
     default:
       return "—";
   }

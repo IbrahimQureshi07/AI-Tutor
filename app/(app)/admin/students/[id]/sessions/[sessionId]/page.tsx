@@ -7,6 +7,10 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SECTIONS } from "@/lib/constants";
+import {
+  sessionRunTypeLabel,
+  type SessionRunType,
+} from "@/lib/admin/session-history";
 
 type SessionDetail = {
   id: string;
@@ -164,7 +168,9 @@ export default function AdminSessionDetailPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge variant="secondary">{session.runType}</Badge>
+          <Badge variant="secondary">
+            {sessionRunTypeLabel(session.runType as SessionRunType, session.mode)}
+          </Badge>
           <Badge variant={statusBadgeVariant(session.status)}>{session.status}</Badge>
         </div>
       </div>
@@ -184,7 +190,8 @@ export default function AdminSessionDetailPage() {
           <CardTitle>Question attempts</CardTitle>
           <p className="text-xs text-ink-muted">
             {session.attempts.length} total · {wrong} wrong (primary) ·{" "}
-            {MODE_LABELS[session.mode] ?? session.mode} · {session.runType} run
+            {MODE_LABELS[session.mode] ?? session.mode} ·{" "}
+            {sessionRunTypeLabel(session.runType as SessionRunType, session.mode)}
           </p>
         </CardHeader>
         <CardContent className="space-y-4 overflow-x-auto">

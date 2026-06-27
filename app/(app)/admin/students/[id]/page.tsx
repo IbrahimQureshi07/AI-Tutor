@@ -14,7 +14,10 @@ import {
   GrantAccessPanel,
   type StudentAccessInfo,
 } from "@/components/admin/grant-access-panel";
-import type { SessionHistoryRow } from "@/lib/admin/session-history";
+import {
+  sessionRunTypeLabel,
+  type SessionHistoryRow,
+} from "@/lib/admin/session-history";
 import type { Journey, JourneyMode } from "@/lib/journey/load";
 import type {
   ModeKey,
@@ -377,8 +380,8 @@ export default function AdminStudentDetailPage() {
                         {MODE_LABELS[row.mode] ?? row.mode}
                       </Link>
                     </td>
-                    <td className="py-2.5 pr-3 capitalize text-ink-muted">
-                      {row.runType === "unknown" ? "—" : row.runType}
+                    <td className="py-2.5 pr-3 text-ink-muted">
+                      {sessionRunTypeLabel(row.runType, row.mode)}
                     </td>
                     <td className="py-2.5 pr-3">
                       <Badge

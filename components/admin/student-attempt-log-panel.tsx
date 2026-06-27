@@ -5,6 +5,10 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SECTIONS } from "@/lib/constants";
+import {
+  sessionRunTypeLabel,
+  type SessionRunType,
+} from "@/lib/admin/session-history";
 
 type AttemptRow = {
   id: string;
@@ -257,8 +261,11 @@ export function StudentAttemptLogPanel({ studentId }: { studentId: string }) {
                     <td className="py-2.5 pr-3 text-xs text-ink-muted">
                       {MODE_LABELS[a.mode] ?? a.mode}
                     </td>
-                    <td className="py-2.5 pr-3 text-xs capitalize text-ink-muted">
-                      {a.runType === "unknown" ? "—" : a.runType}
+                    <td className="py-2.5 pr-3 text-xs text-ink-muted">
+                      {sessionRunTypeLabel(
+                        a.runType as SessionRunType,
+                        a.mode,
+                      )}
                     </td>
                     <td className="py-2.5 pr-3">
                       <Badge

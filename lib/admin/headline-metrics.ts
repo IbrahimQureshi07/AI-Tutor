@@ -2,6 +2,7 @@ import type { Journey } from "@/lib/journey/load";
 import type { UserStats } from "@/lib/kpi/stats";
 import {
   sessionModeLabel,
+  sessionRunTypeLabel,
   type SessionHistoryRow,
   type SessionMode,
   type SessionRunType,
@@ -31,11 +32,6 @@ const ALL_MODES: SessionMode[] = [
   "mock",
   "final",
 ];
-
-function runTypeDisplay(type: SessionRunType): string {
-  if (type === "unknown") return "unknown";
-  return type;
-}
 
 /** Latest + best scores from finished sessions only. */
 export function buildFinishedTestScores(
@@ -108,7 +104,7 @@ export function buildModeRunBreakdown(
       mode: r.mode,
       modeLabel: sessionModeLabel(r.mode),
       runType: r.runType,
-      runTypeLabel: runTypeDisplay(r.runType),
+      runTypeLabel: sessionRunTypeLabel(r.runType, r.mode),
       finished: r.finished,
       partial: r.partial,
     }));

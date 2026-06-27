@@ -261,7 +261,7 @@ export function StudentHeadlineMetrics({
                     <span className="text-sm font-medium text-ink shrink-0">
                       {row.modeLabel}
                     </span>
-                    <Badge variant="secondary" className="text-[10px] capitalize shrink-0">
+                    <Badge variant="secondary" className="text-[10px] shrink-0">
                       {row.runTypeLabel}
                     </Badge>
                   </div>

@@ -1,5 +1,6 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { isUserAdmin } from "@/lib/auth/bootstrap-admin";
+import { isPaywallEnabled } from "@/lib/access/paywall-settings";
 import type {
   AccessProfile,
   AccessState,
@@ -158,7 +159,26 @@ export async function getAccessState(
     return buildLegacyFullAccessState(isAdmin);
   }
 
-  return resolveAccessState(loaded.profile, isAdmin, true);
+  const state = resolveAccessState(loaded.profile, isAdmin, true);
+
+  // Global paywall off → active accounts skip /unlock (DB access_status unchanged).
+  // Deactivated accounts and admins keep their normal rules.
+  if (
+    !state.isAdmin &&
+    state.needsPaywall &&
+    loaded.profile?.is_active !== false
+  ) {
+    const paywallOn = await isPaywallEnabled(supabase);
+    if (!paywallOn) {
+      return {
+        ...state,
+        hasFullAccess: true,
+        needsPaywall: false,
+      };
+    }
+  }
+
+  return state;
 }
 
 export async function hasFullAccess(

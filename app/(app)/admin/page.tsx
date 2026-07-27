@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { AdminMetricTooltip } from "@/components/admin/admin-metric-tooltip";
+import { PaywallTogglePanel } from "@/components/admin/paywall-toggle-panel";
 
 type ModeKey = "assessment" | "practice" | "mistakes" | "mock" | "final";
 
@@ -133,6 +134,8 @@ export default function AdminHomePage() {
           </Button>
         </div>
       </div>
+
+      <PaywallTogglePanel />
 
       {loading ? (
         <p className="text-sm text-ink-muted">Loading overview…</p>

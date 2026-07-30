@@ -8,9 +8,29 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SECTIONS } from "@/lib/constants";
 import {
+  formatOptionWithWording,
   sessionRunTypeLabel,
   type SessionRunType,
 } from "@/lib/admin/session-history";
+import { cn } from "@/lib/utils";
+
+type Attempt = {
+  id: string;
+  sectionCode: string;
+  prompt: string;
+  promptPreview: string;
+  optionA: string;
+  optionB: string;
+  optionC: string;
+  optionD: string;
+  userAnswer: string | null;
+  correctOption: string;
+  isCorrect: boolean;
+  isSibling: boolean;
+  hinted: boolean;
+  timeSpentMs: number;
+  createdAt: string;
+};
 
 type SessionDetail = {
   id: string;
@@ -24,18 +44,7 @@ type SessionDetail = {
   total: number;
   correct: number;
   durationMs: number | null;
-  attempts: Array<{
-    id: string;
-    sectionCode: string;
-    promptPreview: string;
-    userAnswer: string | null;
-    correctOption: string;
-    isCorrect: boolean;
-    isSibling: boolean;
-    hinted: boolean;
-    timeSpentMs: number;
-    createdAt: string;
-  }>;
+  attempts: Attempt[];
 };
 
 const MODE_LABELS: Record<string, string> = {
@@ -76,6 +85,15 @@ function statusBadgeVariant(
   if (status === "finished") return "success";
   if (status === "in_progress") return "warn";
   return "outline";
+}
+
+function attemptOptions(a: Attempt) {
+  return {
+    optionA: a.optionA,
+    optionB: a.optionB,
+    optionC: a.optionC,
+    optionD: a.optionD,
+  };
 }
 
 export default function AdminSessionDetailPage() {
@@ -192,9 +210,10 @@ export default function AdminSessionDetailPage() {
             {session.attempts.length} total · {wrong} wrong (primary) ·{" "}
             {MODE_LABELS[session.mode] ?? session.mode} ·{" "}
             {sessionRunTypeLabel(session.runType as SessionRunType, session.mode)}
+            . Full question text with student pick vs correct key wording.
           </p>
         </CardHeader>
-        <CardContent className="space-y-4 overflow-x-auto">
+        <CardContent className="space-y-4">
           <div className="grid gap-2 sm:grid-cols-3 max-w-xl">
             <label className="space-y-1">
               <span className="text-[10px] uppercase tracking-wide text-ink-muted">
@@ -245,47 +264,99 @@ export default function AdminSessionDetailPage() {
           {filteredAttempts.length === 0 ? (
             <p className="text-sm text-ink-muted">No attempts match these filters.</p>
           ) : (
-            <table className="w-full min-w-[720px] text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs text-ink-muted uppercase tracking-wide">
-                  <th className="pb-2 pr-3 font-medium">Question</th>
-                  <th className="pb-2 pr-3 font-medium w-16">Section</th>
-                  <th className="pb-2 pr-3 font-medium w-16">Answer</th>
-                  <th className="pb-2 pr-3 font-medium w-16">Key</th>
-                  <th className="pb-2 pr-3 font-medium w-20">Result</th>
-                  <th className="pb-2 pr-3 font-medium w-24">Type</th>
-                  <th className="pb-2 font-medium w-28">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredAttempts.map((a) => (
-                  <tr key={a.id} className="border-b border-border/60 align-top">
-                    <td className="py-2.5 pr-3 text-ink max-w-md">
-                      <span className="line-clamp-2">{a.promptPreview}</span>
-                    </td>
-                    <td className="py-2.5 pr-3 font-medium text-primary tabular-nums">
-                      {a.sectionCode}
-                    </td>
-                    <td className="py-2.5 pr-3 tabular-nums">{a.userAnswer ?? "—"}</td>
-                    <td className="py-2.5 pr-3 tabular-nums">{a.correctOption}</td>
-                    <td className="py-2.5 pr-3">
-                      <Badge
-                        variant={a.isCorrect ? "success" : "danger"}
-                        className="text-[10px]"
-                      >
-                        {a.isCorrect ? "correct" : "wrong"}
-                      </Badge>
-                    </td>
-                    <td className="py-2.5 pr-3 text-xs text-ink-muted">
-                      {a.isSibling ? "extra try" : a.hinted ? "hinted" : "primary"}
-                    </td>
-                    <td className="py-2.5 text-xs text-ink-muted whitespace-nowrap">
-                      {fmtDateTime(a.createdAt)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="space-y-3">
+              {filteredAttempts.map((a, i) => {
+                const opts = attemptOptions(a);
+                const studentPick = formatOptionWithWording(a.userAnswer, opts);
+                const correctKey = formatOptionWithWording(a.correctOption, opts);
+                return (
+                  <div
+                    key={a.id}
+                    className={cn(
+                      "rounded-xl border border-border/70 bg-elevated/20 p-4 space-y-3",
+                      !a.isCorrect && "border-danger/25",
+                    )}
+                  >
+                    <div className="flex flex-wrap items-center gap-2 justify-between">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-medium text-ink-muted tabular-nums">
+                          #{i + 1}
+                        </span>
+                        <Badge variant="outline" className="text-[10px] font-medium text-primary">
+                          {a.sectionCode}
+                        </Badge>
+                        <Badge
+                          variant={a.isCorrect ? "success" : "danger"}
+                          className="text-[10px]"
+                        >
+                          {a.isCorrect ? "correct" : "wrong"}
+                        </Badge>
+                        <span className="text-xs text-ink-muted">
+                          {a.isSibling ? "extra try" : a.hinted ? "hinted" : "primary"}
+                        </span>
+                      </div>
+                      <span className="text-xs text-ink-muted whitespace-nowrap">
+                        {fmtDateTime(a.createdAt)}
+                      </span>
+                    </div>
+
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-ink-muted mb-1">
+                        Question
+                      </div>
+                      <p className="text-sm text-ink leading-relaxed whitespace-pre-wrap">
+                        {a.prompt || a.promptPreview || "—"}
+                      </p>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-lg border border-border/60 bg-surface/60 p-3">
+                        <div className="text-[10px] uppercase tracking-wide text-ink-muted mb-1">
+                          Student answer
+                        </div>
+                        <p
+                          className={cn(
+                            "text-sm leading-relaxed whitespace-pre-wrap",
+                            a.isCorrect ? "text-success" : "text-danger",
+                          )}
+                        >
+                          {studentPick}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-border/60 bg-surface/60 p-3">
+                        <div className="text-[10px] uppercase tracking-wide text-ink-muted mb-1">
+                          Correct answer (key)
+                        </div>
+                        <p className="text-sm text-ink leading-relaxed whitespace-pre-wrap">
+                          {correctKey}
+                        </p>
+                      </div>
+                    </div>
+
+                    <details className="text-xs">
+                      <summary className="cursor-pointer text-ink-muted hover:text-ink select-none">
+                        All options (A–D)
+                      </summary>
+                      <ul className="mt-2 space-y-1.5 text-ink-muted pl-1">
+                        {(
+                          [
+                            ["A", a.optionA],
+                            ["B", a.optionB],
+                            ["C", a.optionC],
+                            ["D", a.optionD],
+                          ] as const
+                        ).map(([letter, text]) => (
+                          <li key={letter} className="leading-relaxed">
+                            <span className="font-medium text-ink">{letter}.</span>{" "}
+                            {text || "—"}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </CardContent>
       </Card>

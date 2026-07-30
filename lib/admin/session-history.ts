@@ -42,8 +42,17 @@ export type SessionAttemptRow = {
   id: string;
   questionId: string;
   sectionCode: string;
+  /** Full question stem (admin review). */
+  prompt: string;
+  /** Short preview kept for compact lists. */
   promptPreview: string;
+  optionA: string;
+  optionB: string;
+  optionC: string;
+  optionD: string;
+  /** Student pick letter A–D. */
   userAnswer: string | null;
+  /** Bank correct letter A–D. */
   correctOption: string;
   isCorrect: boolean;
   isSibling: boolean;
@@ -51,6 +60,29 @@ export type SessionAttemptRow = {
   timeSpentMs: number;
   createdAt: string;
 };
+
+/** "B — wording" for admin review; falls back to letter only. */
+export function formatOptionWithWording(
+  letter: string | null | undefined,
+  options: {
+    optionA?: string | null;
+    optionB?: string | null;
+    optionC?: string | null;
+    optionD?: string | null;
+  },
+): string {
+  if (!letter || letter === "—") return "—";
+  const key = letter.trim().toUpperCase();
+  const map: Record<string, string | null | undefined> = {
+    A: options.optionA,
+    B: options.optionB,
+    C: options.optionC,
+    D: options.optionD,
+  };
+  const text = (map[key] ?? "").trim();
+  if (!text) return key;
+  return `${key} — ${text}`;
+}
 
 export type SessionDetail = SessionHistoryRow & {
   userId: string;
@@ -328,7 +360,7 @@ export async function loadSessionDetail(
   const { data: rawAttempts } = await client
     .from("attempts")
     .select(
-      "id, question_id, user_answer, is_correct, is_sibling, hinted, time_spent_ms, created_at, question:questions(section_code, prompt, correct_option)",
+      "id, question_id, user_answer, is_correct, is_sibling, hinted, time_spent_ms, created_at, question:questions(section_code, prompt, option_a, option_b, option_c, option_d, correct_option)",
     )
     .eq("session_id", sessionId)
     .eq("user_id", userId)
@@ -338,14 +370,23 @@ export async function loadSessionDetail(
     const q = row.question as {
       section_code?: string;
       prompt?: string;
+      option_a?: string | null;
+      option_b?: string | null;
+      option_c?: string | null;
+      option_d?: string | null;
       correct_option?: string;
     } | null;
-    const prompt = q?.prompt ?? "";
+    const prompt = (q?.prompt ?? "").trim();
     return {
       id: row.id as string,
       questionId: row.question_id as string,
       sectionCode: q?.section_code ?? "—",
-      promptPreview: prompt.length > 120 ? `${prompt.slice(0, 117)}…` : prompt,
+      prompt: prompt || "—",
+      promptPreview: prompt.length > 120 ? `${prompt.slice(0, 117)}…` : prompt || "—",
+      optionA: (q?.option_a ?? "").trim(),
+      optionB: (q?.option_b ?? "").trim(),
+      optionC: (q?.option_c ?? "").trim(),
+      optionD: (q?.option_d ?? "").trim(),
       userAnswer: (row.user_answer as string | null) ?? null,
       correctOption: q?.correct_option ?? "—",
       isCorrect: Boolean(row.is_correct),

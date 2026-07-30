@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import type { ModeKey } from "@/lib/constants";
 import type { QuestionRow } from "@/lib/supabase/types";
 import { shuffle } from "@/lib/utils";
+import { datasetBankOnly } from "@/lib/questions/dataset-bank";
 
 type StartArgs = {
   mode: ModeKey;
@@ -67,11 +68,9 @@ export async function getQuestionsForMode(
 
     const ids = (mistakes ?? []).map((m) => m.question_id);
     if (!ids.length) return [];
-    const { data: qs } = await supabase
-      .from("questions")
-      .select("*")
-      .in("id", ids)
-      .limit(opts.count);
+    const { data: qs } = await datasetBankOnly(
+      supabase.from("questions").select("*").in("id", ids),
+    ).limit(opts.count);
     return shuffle((qs ?? []) as QuestionRow[]).slice(0, opts.count);
   }
 
@@ -83,12 +82,13 @@ export async function getQuestionsForMode(
     const perSection = Math.max(1, Math.floor(opts.count / sections.length));
     const all: QuestionRow[] = [];
     for (const code of sections) {
-      const { data } = await supabase
-        .from("questions")
-        .select("*")
-        .eq("section_code", code)
-        .eq("pool", "standard")
-        .limit(50);
+      const { data } = await datasetBankOnly(
+        supabase
+          .from("questions")
+          .select("*")
+          .eq("section_code", code)
+          .eq("pool", "standard"),
+      ).limit(50);
       const picks = shuffle((data ?? []) as QuestionRow[]).slice(0, perSection);
       all.push(...picks);
     }
@@ -99,18 +99,20 @@ export async function getQuestionsForMode(
     // SC format: 80 National (A1–A6) + 40 State (B1–B6)
     const nationalCount = Math.round(opts.count * (2 / 3));
     const stateCount = opts.count - nationalCount;
-    const { data: nat } = await supabase
-      .from("questions")
-      .select("*")
-      .in("section_code", ["A1","A2","A3","A4","A5","A6"])
-      .eq("pool", pool)
-      .limit(nationalCount * 3);
-    const { data: st } = await supabase
-      .from("questions")
-      .select("*")
-      .in("section_code", ["B1","B2","B3","B4","B5","B6"])
-      .eq("pool", pool)
-      .limit(stateCount * 3);
+    const { data: nat } = await datasetBankOnly(
+      supabase
+        .from("questions")
+        .select("*")
+        .in("section_code", ["A1","A2","A3","A4","A5","A6"])
+        .eq("pool", pool),
+    ).limit(nationalCount * 3);
+    const { data: st } = await datasetBankOnly(
+      supabase
+        .from("questions")
+        .select("*")
+        .in("section_code", ["B1","B2","B3","B4","B5","B6"])
+        .eq("pool", pool),
+    ).limit(stateCount * 3);
     const combined = [
       ...shuffle((nat ?? []) as QuestionRow[]).slice(0, nationalCount),
       ...shuffle((st ?? []) as QuestionRow[]).slice(0, stateCount),
@@ -119,11 +121,9 @@ export async function getQuestionsForMode(
   }
 
   // practice: callers should use pickPracticeQuestions() from lib/practice/pick-questions.ts
-  const { data } = await supabase
-    .from("questions")
-    .select("*")
-    .eq("pool", "standard")
-    .limit(opts.count * 3);
+  const { data } = await datasetBankOnly(
+    supabase.from("questions").select("*").eq("pool", "standard"),
+  ).limit(opts.count * 3);
   return shuffle((data ?? []) as QuestionRow[]).slice(0, opts.count);
 }
 

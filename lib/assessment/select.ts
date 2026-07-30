@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { QuestionRow } from "@/lib/supabase/types";
 import { shuffle } from "@/lib/utils";
+import { datasetBankOnly } from "@/lib/questions/dataset-bank";
 
 /**
  * Build a balanced assessment set:
@@ -21,12 +22,13 @@ export async function pickAssessmentQuestions(
 
   await Promise.all(
     sections.map(async (code) => {
-      const { data, error } = await supabase
-        .from("questions")
-        .select("*")
-        .eq("section_code", code)
-        .eq("pool", "standard")
-        .limit(1000);
+      const { data, error } = await datasetBankOnly(
+        supabase
+          .from("questions")
+          .select("*")
+          .eq("section_code", code)
+          .eq("pool", "standard"),
+      ).limit(1000);
 
       if (error || !data) {
         buckets[code] = [];

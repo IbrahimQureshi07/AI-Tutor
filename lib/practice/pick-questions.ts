@@ -9,6 +9,7 @@ import {
   FOCUS_FLOOR,
   sanitizePlan,
 } from "@/lib/coach/debrief-plan";
+import { datasetBankOnly } from "@/lib/questions/dataset-bank";
 
 /** SC salesperson exam mix: 80 national + 40 state = 120 scored items. */
 export const PRACTICE_TOTAL = 110;
@@ -185,13 +186,14 @@ async function fetchLevel(
   need: number,
 ): Promise<QuestionRow[]> {
   if (need <= 0) return [];
-  const { data } = await supabase
-    .from("questions")
-    .select("*")
-    .eq("section_code", section)
-    .eq("pool", "standard")
-    .eq("level", level)
-    .limit(Math.min(500, need * 6));
+  const { data } = await datasetBankOnly(
+    supabase
+      .from("questions")
+      .select("*")
+      .eq("section_code", section)
+      .eq("pool", "standard")
+      .eq("level", level),
+  ).limit(Math.min(500, need * 6));
   return shuffle((data ?? []) as QuestionRow[]).slice(0, need);
 }
 
@@ -202,12 +204,13 @@ async function fillShortfall(
   excludeIds: Set<string>,
 ): Promise<QuestionRow[]> {
   if (need <= 0) return [];
-  const { data } = await supabase
-    .from("questions")
-    .select("*")
-    .eq("section_code", section)
-    .eq("pool", "standard")
-    .limit(400);
+  const { data } = await datasetBankOnly(
+    supabase
+      .from("questions")
+      .select("*")
+      .eq("section_code", section)
+      .eq("pool", "standard"),
+  ).limit(400);
   const pool = shuffle((data ?? []) as QuestionRow[]).filter(
     (q) => !excludeIds.has(q.id),
   );
@@ -353,11 +356,9 @@ export async function pickPracticeQuestions(
   }
 
   const need = target - shuffled.length;
-  const { data: filler } = await supabase
-    .from("questions")
-    .select("*")
-    .eq("pool", "standard")
-    .limit(need * 4);
+  const { data: filler } = await datasetBankOnly(
+    supabase.from("questions").select("*").eq("pool", "standard"),
+  ).limit(need * 4);
   const ids = new Set(shuffled.map((q) => q.id));
   const extra = shuffle((filler ?? []) as QuestionRow[]).filter(
     (q) => !ids.has(q.id),

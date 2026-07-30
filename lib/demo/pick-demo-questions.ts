@@ -3,6 +3,7 @@ import { SECTIONS } from "@/lib/constants";
 import type { QuestionRow } from "@/lib/supabase/types";
 import { shuffle } from "@/lib/utils";
 import { DEMO_QUESTION_COUNT } from "@/lib/demo/constants";
+import { datasetBankOnly } from "@/lib/questions/dataset-bank";
 
 const SELECT =
   "id, section_code, topic_id, concept_id, level, prompt, option_a, option_b, option_c, option_d, correct_option, hint, explanation, source";
@@ -12,11 +13,9 @@ export async function pickDemoQuestions(
   admin: SupabaseClient,
   count = DEMO_QUESTION_COUNT,
 ): Promise<QuestionRow[]> {
-  const { data, error } = await admin
-    .from("questions")
-    .select(SELECT)
-    .in("level", ["easy", "medium"])
-    .limit(500);
+  const { data, error } = await datasetBankOnly(
+    admin.from("questions").select(SELECT).in("level", ["easy", "medium"]),
+  ).limit(500);
 
   if (error || !data?.length) {
     throw new Error(error?.message ?? "No questions available for demo");

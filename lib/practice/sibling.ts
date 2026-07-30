@@ -5,6 +5,7 @@ import { getModel } from "@/lib/ai/provider";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { QuestionRow } from "@/lib/supabase/types";
 import { shuffle } from "@/lib/utils";
+import { datasetBankOnly } from "@/lib/questions/dataset-bank";
 
 const SIBLING_SYSTEM_BASE = `You are an expert South Carolina real estate exam writer.
 The student just missed a question on a specific concept. Write ONE new
@@ -83,41 +84,44 @@ async function pickBankSibling(
   excludeIds: Set<string>,
   targetLevel: "easy" | "medium" | "hard",
 ): Promise<QuestionRow | null> {
-  const { data: sameConcept } = await supabase
-    .from("questions")
-    .select("*")
-    .eq("section_code", parent.section_code)
-    .eq("pool", "standard")
-    .eq("level", targetLevel)
-    .eq("concept_id", parent.concept_id ?? "")
-    .neq("id", parent.id)
-    .limit(50);
-
-  let pool = (sameConcept ?? []) as QuestionRow[];
-  pool = pool.filter((q) => !excludeIds.has(q.id));
-
-  if (pool.length === 0) {
-    const { data: sameLevel } = await supabase
+  const { data: sameConcept } = await datasetBankOnly(
+    supabase
       .from("questions")
       .select("*")
       .eq("section_code", parent.section_code)
       .eq("pool", "standard")
       .eq("level", targetLevel)
-      .neq("id", parent.id)
-      .limit(60);
+      .eq("concept_id", parent.concept_id ?? "")
+      .neq("id", parent.id),
+  ).limit(50);
+
+  let pool = (sameConcept ?? []) as QuestionRow[];
+  pool = pool.filter((q) => !excludeIds.has(q.id));
+
+  if (pool.length === 0) {
+    const { data: sameLevel } = await datasetBankOnly(
+      supabase
+        .from("questions")
+        .select("*")
+        .eq("section_code", parent.section_code)
+        .eq("pool", "standard")
+        .eq("level", targetLevel)
+        .neq("id", parent.id),
+    ).limit(60);
     pool = ((sameLevel ?? []) as QuestionRow[]).filter(
       (q) => !excludeIds.has(q.id),
     );
   }
 
   if (pool.length === 0) {
-    const { data: sameSection } = await supabase
-      .from("questions")
-      .select("*")
-      .eq("section_code", parent.section_code)
-      .eq("pool", "standard")
-      .neq("id", parent.id)
-      .limit(60);
+    const { data: sameSection } = await datasetBankOnly(
+      supabase
+        .from("questions")
+        .select("*")
+        .eq("section_code", parent.section_code)
+        .eq("pool", "standard")
+        .neq("id", parent.id),
+    ).limit(60);
     pool = ((sameSection ?? []) as QuestionRow[]).filter(
       (q) => !excludeIds.has(q.id),
     );

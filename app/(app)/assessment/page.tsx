@@ -3,6 +3,7 @@ import { AssessmentPicker } from "@/components/assessment/assessment-picker";
 import { createClient } from "@/lib/supabase/server";
 import { SECTIONS, type SectionCode } from "@/lib/constants";
 import { getAssessmentCoverage } from "@/lib/assessment/coverage";
+import { datasetBankOnly } from "@/lib/questions/dataset-bank";
 
 export default async function AssessmentIntro({
   searchParams,
@@ -28,12 +29,13 @@ export default async function AssessmentIntro({
   // default 1000-row select cap when the bank grows past ~1k rows.
   const results = await Promise.all(
     SECTIONS.map((s) =>
-      supabase
-        .from("questions")
-        .select("id", { count: "exact", head: true })
-        .eq("section_code", s.code)
-        .eq("pool", "standard")
-        .then(({ count }) => [s.code, count ?? 0] as const),
+      datasetBankOnly(
+        supabase
+          .from("questions")
+          .select("id", { count: "exact", head: true })
+          .eq("section_code", s.code)
+          .eq("pool", "standard"),
+      ).then(({ count }) => [s.code, count ?? 0] as const),
     ),
   );
   const counts: Record<string, number> = Object.fromEntries(results);

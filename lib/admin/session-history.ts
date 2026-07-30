@@ -59,7 +59,68 @@ export type SessionAttemptRow = {
   hinted: boolean;
   timeSpentMs: number;
   createdAt: string;
+  /** Raw questions.source from DB. */
+  questionSource: string | null;
+  /** questions.is_ai_generated */
+  isAiGenerated: boolean;
+  /** Content origin for admin badges. */
+  contentOrigin: QuestionContentOrigin;
 };
+
+export type QuestionContentOrigin = {
+  kind: "dataset" | "llm";
+  /** Short badge text, e.g. "Dataset" or "LLM generated". */
+  label: string;
+  /** Optional detail for tooltip / secondary text. */
+  detail: string;
+};
+
+/**
+ * Classify whether a question row came from the imported bank or AI sibling gen.
+ * LLM: is_ai_generated, or source ai_sibling / ai_sibling_harder.
+ * Everything else → Dataset (CSV import / manual bank).
+ */
+export function resolveQuestionContentOrigin(meta: {
+  source?: string | null;
+  isAiGenerated?: boolean | null;
+}): QuestionContentOrigin {
+  const source = (meta.source ?? "").trim().toLowerCase();
+  const aiFlag = meta.isAiGenerated === true;
+  const aiFromSource =
+    source === "ai_sibling" ||
+    source === "ai_sibling_harder" ||
+    source.startsWith("ai_");
+
+  if (aiFlag || aiFromSource) {
+    if (source === "ai_sibling_harder") {
+      return {
+        kind: "llm",
+        label: "LLM generated",
+        detail: "AI harder follow-up (extra try) saved into the question bank",
+      };
+    }
+    if (source === "ai_sibling" || aiFlag) {
+      return {
+        kind: "llm",
+        label: "LLM generated",
+        detail: "AI follow-up question saved into the question bank",
+      };
+    }
+    return {
+      kind: "llm",
+      label: "LLM generated",
+      detail: source ? `source: ${source}` : "AI-generated question",
+    };
+  }
+
+  return {
+    kind: "dataset",
+    label: "Dataset",
+    detail: source
+      ? `Imported / bank question (source: ${source})`
+      : "Imported CSV / question bank",
+  };
+}
 
 /** "B — wording" for admin review; falls back to letter only. */
 export function formatOptionWithWording(
@@ -360,7 +421,7 @@ export async function loadSessionDetail(
   const { data: rawAttempts } = await client
     .from("attempts")
     .select(
-      "id, question_id, user_answer, is_correct, is_sibling, hinted, time_spent_ms, created_at, question:questions(section_code, prompt, option_a, option_b, option_c, option_d, correct_option)",
+      "id, question_id, user_answer, is_correct, is_sibling, hinted, time_spent_ms, created_at, question:questions(section_code, prompt, option_a, option_b, option_c, option_d, correct_option, source, is_ai_generated)",
     )
     .eq("session_id", sessionId)
     .eq("user_id", userId)
@@ -375,8 +436,12 @@ export async function loadSessionDetail(
       option_c?: string | null;
       option_d?: string | null;
       correct_option?: string;
+      source?: string | null;
+      is_ai_generated?: boolean | null;
     } | null;
     const prompt = (q?.prompt ?? "").trim();
+    const questionSource = q?.source ?? null;
+    const isAiGenerated = Boolean(q?.is_ai_generated);
     return {
       id: row.id as string,
       questionId: row.question_id as string,
@@ -394,6 +459,12 @@ export async function loadSessionDetail(
       hinted: Boolean(row.hinted),
       timeSpentMs: (row.time_spent_ms as number) ?? 0,
       createdAt: row.created_at as string,
+      questionSource,
+      isAiGenerated,
+      contentOrigin: resolveQuestionContentOrigin({
+        source: questionSource,
+        isAiGenerated,
+      }),
     };
   });
 

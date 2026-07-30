@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { SECTIONS } from "@/lib/constants";
 import {
   formatOptionWithWording,
+  resolveQuestionContentOrigin,
   sessionRunTypeLabel,
   type SessionRunType,
 } from "@/lib/admin/session-history";
@@ -30,6 +31,13 @@ type Attempt = {
   hinted: boolean;
   timeSpentMs: number;
   createdAt: string;
+  questionSource?: string | null;
+  isAiGenerated?: boolean;
+  contentOrigin?: {
+    kind: "dataset" | "llm";
+    label: string;
+    detail: string;
+  };
 };
 
 type SessionDetail = {
@@ -210,7 +218,8 @@ export default function AdminSessionDetailPage() {
             {session.attempts.length} total · {wrong} wrong (primary) ·{" "}
             {MODE_LABELS[session.mode] ?? session.mode} ·{" "}
             {sessionRunTypeLabel(session.runType as SessionRunType, session.mode)}
-            . Full question text with student pick vs correct key wording.
+            . Full question text with student pick vs correct key wording. Dataset
+            vs LLM badge shows where the question content came from.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -261,6 +270,22 @@ export default function AdminSessionDetailPage() {
             Showing {filteredAttempts.length} of {session.attempts.length}
           </p>
 
+          <div className="rounded-lg border border-border/60 bg-elevated/30 px-3 py-2 text-[11px] text-ink-muted space-y-1">
+            <p>
+              <span className="font-medium text-ink">Dataset</span> — imported CSV
+              / question bank (not AI-written).
+            </p>
+            <p>
+              <span className="font-medium text-ink">LLM generated</span> — AI
+              follow-up created after a miss (may appear as primary later if
+              reused from the bank).
+            </p>
+            <p>
+              <span className="font-medium text-ink">primary / extra try</span> —
+              attempt type in this session (extra try = sibling follow-up turn).
+            </p>
+          </div>
+
           {filteredAttempts.length === 0 ? (
             <p className="text-sm text-ink-muted">No attempts match these filters.</p>
           ) : (
@@ -269,6 +294,12 @@ export default function AdminSessionDetailPage() {
                 const opts = attemptOptions(a);
                 const studentPick = formatOptionWithWording(a.userAnswer, opts);
                 const correctKey = formatOptionWithWording(a.correctOption, opts);
+                const origin =
+                  a.contentOrigin ??
+                  resolveQuestionContentOrigin({
+                    source: a.questionSource,
+                    isAiGenerated: a.isAiGenerated,
+                  });
                 return (
                   <div
                     key={a.id}
@@ -284,6 +315,13 @@ export default function AdminSessionDetailPage() {
                         </span>
                         <Badge variant="outline" className="text-[10px] font-medium text-primary">
                           {a.sectionCode}
+                        </Badge>
+                        <Badge
+                          variant={origin.kind === "llm" ? "warn" : "secondary"}
+                          className="text-[10px]"
+                          title={origin.detail}
+                        >
+                          {origin.label}
                         </Badge>
                         <Badge
                           variant={a.isCorrect ? "success" : "danger"}

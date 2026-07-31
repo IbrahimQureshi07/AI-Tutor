@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +49,7 @@ export default function AdminQuestionsPage() {
   const [items, setItems] = React.useState<QuestionItem[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
+  const [exporting, setExporting] = React.useState(false);
   const [form, setForm] = React.useState<FormState>(EMPTY_FORM);
   const [editingId, setEditingId] = React.useState<string | null>(null);
 
@@ -117,13 +119,58 @@ export default function AdminQuestionsPage() {
     }
   }
 
+  async function downloadDatasetCsv() {
+    setExporting(true);
+    try {
+      const res = await fetch("/api/admin/questions/export", { cache: "no-store" });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        toast.error(json.error ?? "Could not export CSV.");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const stamp = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `dataset-questions-${stamp}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      const count = res.headers.get("X-Row-Count");
+      toast.success(
+        count
+          ? `Downloaded ${count} dataset questions (LLM excluded).`
+          : "Dataset CSV downloaded (LLM excluded).",
+      );
+    } catch {
+      toast.error("Could not export CSV.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-serif text-3xl font-semibold tracking-tight">Questions</h1>
-        <p className="text-ink-muted mt-1 text-sm">
-          Create or update question bank entries.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-serif text-3xl font-semibold tracking-tight">Questions</h1>
+          <p className="text-ink-muted mt-1 text-sm">
+            Create or update question bank entries. CSV export is dataset-only
+            (excludes LLM-generated follow-ups).
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={exporting}
+          onClick={() => void downloadDatasetCsv()}
+        >
+          <Download className="h-4 w-4" />
+          {exporting ? "Preparing CSV…" : "Download dataset CSV"}
+        </Button>
       </div>
 
       <Card>

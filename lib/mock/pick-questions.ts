@@ -3,7 +3,6 @@ import { SECTIONS, type SectionCode } from "@/lib/constants";
 import type { QuestionRow } from "@/lib/supabase/types";
 import { shuffle } from "@/lib/utils";
 import { allocateSectionCounts } from "@/lib/practice/pick-questions";
-import { datasetBankOnly } from "@/lib/questions/dataset-bank";
 
 /**
  * SC salesperson exam: 120 scored items, 80 National (A1–A6) + 40 State (B1–B6).
@@ -205,15 +204,15 @@ async function fetchLevel(
   excludeIds: Set<string>,
 ): Promise<QuestionRow[]> {
   if (need <= 0) return [];
-  const { data } = await datasetBankOnly(
-    supabase
-      .from("questions")
-      .select("*")
-      .eq("section_code", section)
-      .eq("pool", "standard")
-      .eq("level", level)
-      .is("parent_question_id", null),
-  ).limit(Math.max(need * 6, 40));
+  const { data } = await supabase
+    .from("questions")
+    .select("*")
+    .eq("section_code", section)
+    .eq("pool", "standard")
+    .eq("level", level)
+    .is("parent_question_id", null)
+    .eq("is_ai_generated", false)
+    .limit(Math.max(need * 6, 40));
   const pool = ((data ?? []) as QuestionRow[]).filter(
     (q) => !excludeIds.has(q.id),
   );
@@ -227,14 +226,14 @@ async function fetchSectionFallback(
   excludeIds: Set<string>,
 ): Promise<QuestionRow[]> {
   if (need <= 0) return [];
-  const { data } = await datasetBankOnly(
-    supabase
-      .from("questions")
-      .select("*")
-      .eq("section_code", section)
-      .eq("pool", "standard")
-      .is("parent_question_id", null),
-  ).limit(200);
+  const { data } = await supabase
+    .from("questions")
+    .select("*")
+    .eq("section_code", section)
+    .eq("pool", "standard")
+    .is("parent_question_id", null)
+    .eq("is_ai_generated", false)
+    .limit(200);
   const pool = ((data ?? []) as QuestionRow[]).filter(
     (q) => !excludeIds.has(q.id),
   );
@@ -380,13 +379,13 @@ export async function pickMockQuestions(
   // student still sees exactly `target` questions — keep exclusions honored.
   const stillNeed = target - picked.length;
   if (stillNeed > 0) {
-    const { data } = await datasetBankOnly(
-      supabase
-        .from("questions")
-        .select("*")
-        .eq("pool", "standard")
-        .is("parent_question_id", null),
-    ).limit(stillNeed * 6);
+    const { data } = await supabase
+      .from("questions")
+      .select("*")
+      .eq("pool", "standard")
+      .is("parent_question_id", null)
+      .eq("is_ai_generated", false)
+      .limit(stillNeed * 6);
     const extra = ((data ?? []) as QuestionRow[]).filter(
       (q) => !excludeIds.has(q.id),
     );

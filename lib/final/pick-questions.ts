@@ -2,7 +2,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { SECTIONS, type SectionCode } from "@/lib/constants";
 import type { QuestionRow } from "@/lib/supabase/types";
 import { shuffle } from "@/lib/utils";
-import { datasetBankOnly } from "@/lib/questions/dataset-bank";
 
 /**
  * SC PSI Salesperson exam — actual structure per the 2025 PSI bulletin and
@@ -140,13 +139,12 @@ async function fetchUserSeenQuestionIds(
 /* ---------------------------- pool detection --------------------------- */
 
 async function hasHoldoutPool(supabase: SupabaseClient): Promise<boolean> {
-  const { count } = await datasetBankOnly(
-    supabase
-      .from("questions")
-      .select("id", { count: "exact", head: true })
-      .eq("pool", "final_holdout")
-      .is("parent_question_id", null),
-  );
+  const { count } = await supabase
+    .from("questions")
+    .select("id", { count: "exact", head: true })
+    .eq("pool", "final_holdout")
+    .is("parent_question_id", null)
+    .eq("is_ai_generated", false);
   return (count ?? 0) > 0;
 }
 
@@ -163,15 +161,15 @@ async function fetchSectionLevel(
   if (need <= 0) return [];
   // Over-fetch enough to survive exclusion of seen questions.
   const fetchLimit = Math.max(need * 6, 60);
-  const { data } = await datasetBankOnly(
-    supabase
-      .from("questions")
-      .select("*")
-      .eq("section_code", section)
-      .eq("pool", pool)
-      .eq("level", level)
-      .is("parent_question_id", null),
-  ).limit(fetchLimit);
+  const { data } = await supabase
+    .from("questions")
+    .select("*")
+    .eq("section_code", section)
+    .eq("pool", pool)
+    .eq("level", level)
+    .is("parent_question_id", null)
+    .eq("is_ai_generated", false)
+    .limit(fetchLimit);
   const filtered = ((data ?? []) as QuestionRow[]).filter(
     (q) => !exclude.has(q.id),
   );
@@ -186,14 +184,14 @@ async function fetchSectionAny(
   need: number,
 ): Promise<QuestionRow[]> {
   if (need <= 0) return [];
-  const { data } = await datasetBankOnly(
-    supabase
-      .from("questions")
-      .select("*")
-      .eq("section_code", section)
-      .eq("pool", pool)
-      .is("parent_question_id", null),
-  ).limit(Math.max(need * 4, 200));
+  const { data } = await supabase
+    .from("questions")
+    .select("*")
+    .eq("section_code", section)
+    .eq("pool", pool)
+    .is("parent_question_id", null)
+    .eq("is_ai_generated", false)
+    .limit(Math.max(need * 4, 200));
   const filtered = ((data ?? []) as QuestionRow[]).filter(
     (q) => !exclude.has(q.id),
   );
@@ -398,14 +396,13 @@ export async function getFinalPoolStatus(
   for (const s of SECTIONS) {
     // Use head:true count then read ids only when needed. To compute
     // *unseen* we have to subtract the seen set — which means fetching ids.
-    const { data } = await datasetBankOnly(
-      supabase
-        .from("questions")
-        .select("id")
-        .eq("section_code", s.code)
-        .eq("pool", pool)
-        .is("parent_question_id", null),
-    );
+    const { data } = await supabase
+      .from("questions")
+      .select("id")
+      .eq("section_code", s.code)
+      .eq("pool", pool)
+      .is("parent_question_id", null)
+      .eq("is_ai_generated", false);
     const unseen = ((data ?? []) as { id: string }[]).filter(
       (q) => !seen.has(q.id),
     ).length;

@@ -3,7 +3,6 @@ import { SECTIONS, type SectionCode } from "@/lib/constants";
 import type { QuestionRow } from "@/lib/supabase/types";
 import { shuffle } from "@/lib/utils";
 import { allocateSectionCounts } from "@/lib/practice/pick-questions";
-import { datasetBankOnly } from "@/lib/questions/dataset-bank";
 
 /**
  * Mistakes-test sizing — matches Practice so the experience feels symmetrical.
@@ -95,9 +94,11 @@ async function fetchQuestionsByIds(
   ids: string[],
 ): Promise<QuestionRow[]> {
   if (!ids.length) return [];
-  const { data } = await datasetBankOnly(
-    supabase.from("questions").select("*").in("id", ids),
-  );
+  const { data } = await supabase
+    .from("questions")
+    .select("*")
+    .in("id", ids)
+    .eq("is_ai_generated", false);
 
   const byId = new Map<string, QuestionRow>(
     ((data ?? []) as QuestionRow[]).map((q) => [q.id, q]),
@@ -128,15 +129,15 @@ async function fetchSectionLevel(
   excludeIds: Set<string>,
 ): Promise<QuestionRow[]> {
   if (need <= 0) return [];
-  const { data } = await datasetBankOnly(
-    supabase
-      .from("questions")
-      .select("*")
-      .eq("section_code", section)
-      .eq("pool", "standard")
-      .eq("level", level)
-      .is("parent_question_id", null),
-  ).limit(Math.min(400, Math.max(need * 6, 30)));
+  const { data } = await supabase
+    .from("questions")
+    .select("*")
+    .eq("section_code", section)
+    .eq("pool", "standard")
+    .eq("level", level)
+    .is("parent_question_id", null)
+    .eq("is_ai_generated", false)
+    .limit(Math.min(400, Math.max(need * 6, 30)));
 
   const pool = ((data ?? []) as QuestionRow[]).filter((q) => !excludeIds.has(q.id));
   return shuffle(pool).slice(0, need);
@@ -187,15 +188,15 @@ async function fetchSectionFallback(
   excludeIds: Set<string>,
 ): Promise<QuestionRow[]> {
   if (need <= 0) return [];
-  const { data } = await datasetBankOnly(
-    supabase
-      .from("questions")
-      .select("*")
-      .eq("section_code", section)
-      .eq("pool", "standard")
-      .in("level", ["medium", "hard"])
-      .is("parent_question_id", null),
-  ).limit(200);
+  const { data } = await supabase
+    .from("questions")
+    .select("*")
+    .eq("section_code", section)
+    .eq("pool", "standard")
+    .in("level", ["medium", "hard"])
+    .is("parent_question_id", null)
+    .eq("is_ai_generated", false)
+    .limit(200);
   const pool = ((data ?? []) as QuestionRow[]).filter((q) => !excludeIds.has(q.id));
   return shuffle(pool).slice(0, need);
 }
@@ -332,14 +333,14 @@ export async function pickMistakesQuestions(
   // Final top-up if the bank simply doesn't have enough med/hard somewhere.
   const stillNeed = target - mistakeQs.length - filler.length;
   if (stillNeed > 0) {
-    const { data: extra } = await datasetBankOnly(
-      supabase
-        .from("questions")
-        .select("*")
-        .eq("pool", "standard")
-        .in("level", ["medium", "hard"])
-        .is("parent_question_id", null),
-    ).limit(stillNeed * 6);
+    const { data: extra } = await supabase
+      .from("questions")
+      .select("*")
+      .eq("pool", "standard")
+      .in("level", ["medium", "hard"])
+      .is("parent_question_id", null)
+      .eq("is_ai_generated", false)
+      .limit(stillNeed * 6);
     const extraFiltered = ((extra ?? []) as QuestionRow[]).filter(
       (q) => !excludeIds.has(q.id),
     );

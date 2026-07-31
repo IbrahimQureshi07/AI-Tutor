@@ -25,7 +25,10 @@ const COLUMNS = [
 
 type ExportRow = Record<(typeof COLUMNS)[number], string | null>;
 
-const SELECT = COLUMNS.join(", ");
+/** Literal select so Supabase client typing stays concrete. */
+const SELECT =
+  "id, section_code, concept_id, topic_id, level, pool, prompt, option_a, option_b, option_c, option_d, correct_option, hint, explanation, source";
+
 const PAGE = 1000;
 
 function csvEscape(value: string | null | undefined): string {
@@ -43,6 +46,19 @@ function toCsv(rows: ExportRow[]): string {
     COLUMNS.map((col) => csvEscape(row[col])).join(","),
   );
   return [header, ...lines].join("\r\n") + "\r\n";
+}
+
+function asExportRows(data: unknown): ExportRow[] {
+  if (!Array.isArray(data)) return [];
+  return data.map((raw) => {
+    const row = (raw ?? {}) as Record<string, unknown>;
+    const out = {} as ExportRow;
+    for (const col of COLUMNS) {
+      const v = row[col];
+      out[col] = v == null ? null : String(v);
+    }
+    return out;
+  });
 }
 
 export async function GET() {
@@ -78,7 +94,7 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const chunk = (data ?? []) as ExportRow[];
+    const chunk = asExportRows(data);
     all.push(...chunk);
     if (chunk.length < PAGE) break;
     from += PAGE;

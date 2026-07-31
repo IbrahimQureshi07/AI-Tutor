@@ -7,12 +7,11 @@
  *
  * Do NOT apply this when loading a question by id for an existing attempt
  * (hint, coach, results) — those need the exact row that was shown.
+ *
+ * Note: query typed loosely on purpose. Wrapping Supabase builders in a
+ * strict generic caused "Type instantiation is excessively deep" on Vercel.
  */
-
-type EqBoolChain<T> = {
-  eq: (column: string, value: boolean) => T;
-};
-
-export function datasetBankOnly<T extends EqBoolChain<T>>(query: T): T {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function datasetBankOnly(query: any) {
   return query.eq("is_ai_generated", false);
 }

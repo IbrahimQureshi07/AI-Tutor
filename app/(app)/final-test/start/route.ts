@@ -33,15 +33,6 @@ export async function POST(req: Request) {
 
   // Gate check + partial-retake enforcement.
   const gate = await getFinalGateStatus(supabase, user.id);
-  // Cooldown is always enforced.
-  if (gate.details.cooldownDaysRemaining > 0) {
-    return NextResponse.json(
-      {
-        error: `Cooldown active: wait ${gate.details.cooldownDaysRemaining} more day(s) before retaking.`,
-      },
-      { status: 403 },
-    );
-  }
   // Partial-retake mode forces the missing portion regardless of request.
   if (gate.partialRetake?.active) {
     portion = gate.partialRetake.needPortion;

@@ -3,8 +3,6 @@ import { MOCK_SMOKE_TOTAL } from "@/lib/mock/pick-questions";
 import { FINAL_PASS_PCT, type Portion } from "@/lib/final/pick-questions";
 
 const RECENT_MISTAKES_DAYS = 30;
-const RETAKE_COOLDOWN_DAYS_DEFAULT = 7;
-const RETAKE_COOLDOWN_DAYS_AFTER_FAIL = 14;
 const PARTIAL_RETAKE_WINDOW_DAYS = 180; // SC PSI gives 6 months to pass the remaining portion.
 
 /* ------------------------------ types ----------------------------------- */
@@ -16,9 +14,6 @@ export type GateStatus = {
     bestRecentMockPct: number | null;
     avgLast2MockPct: number | null;
     daysSinceLastMistakes: number | null;
-    daysSinceLastFinal: number | null;
-    cooldownDaysRemaining: number;
-    requiredCooldownDays: number;
     /**
      * True if the user has finished at least one Mock **smoke** session.
      * That waives the strict Mock score + recent Mistakes gates so you can
@@ -220,8 +215,7 @@ function computePartialRetake(
 /**
  * Gate logic for Final Test access.
  *
- * Conditions ALL must be met (unless partial-retake is active, which has
- * its own slightly relaxed cooldown — see retake hygiene below):
+ * Conditions ALL must be met (unless partial-retake is active):
  *
  *   1. Most recent Mock score ≥ 75%   OR
  *      Average of last 2 Mocks ≥ 70%
@@ -230,9 +224,10 @@ function computePartialRetake(
  *   2. At least one Mistakes session finished in the last 30 days
  *      (waived if (1) satisfied via smoke-mock QA path).
  *
- *   3. Cooldown:
- *      - 7 days since last Final (default)
- *      - 14 days if last Final was a clear fail (both portions < 65%)
+ * No cooldown between attempts — the held-out/unseen-pool check on the
+ * question picker already guards against re-serving seen questions, so a
+ * time-based retake lock isn't needed and only frustrates students who are
+ * ready to try again immediately.
  *
  * Partial-retake mode is allowed regardless of new Mock scores — the user
  * already proved readiness for one portion; we just want a fresh attempt
@@ -265,24 +260,6 @@ export async function getFinalGateStatus(
   const daysSinceLastMistakes = mistakes?.finished_at
     ? daysBetween(now, new Date(mistakes.finished_at))
     : null;
-
-  const lastFinal = finals[0] ?? null;
-  const daysSinceLastFinal = lastFinal?.finished_at
-    ? daysBetween(now, new Date(lastFinal.finished_at))
-    : null;
-
-  // Cooldown: 14d if the last final was a clear fail, otherwise 7d.
-  let requiredCooldownDays = RETAKE_COOLDOWN_DAYS_DEFAULT;
-  if (lastFinal) {
-    const r = readPortionResult(lastFinal);
-    const bothLow =
-      (r.nationalPct ?? 0) < 65 && (r.statePct ?? 0) < 65 && !r.passed;
-    if (bothLow) requiredCooldownDays = RETAKE_COOLDOWN_DAYS_AFTER_FAIL;
-  }
-  const cooldownDaysRemaining =
-    daysSinceLastFinal != null
-      ? Math.max(0, requiredCooldownDays - daysSinceLastFinal)
-      : 0;
 
   const partial = computePartialRetake(finals, now);
 
@@ -321,13 +298,6 @@ export async function getFinalGateStatus(
     }
   }
 
-  // Gate 3: Cooldown — always enforced.
-  if (cooldownDaysRemaining > 0) {
-    reasons.push(
-      `Cooldown active: wait ${cooldownDaysRemaining} more day${cooldownDaysRemaining === 1 ? "" : "s"} before retaking.`,
-    );
-  }
-
   return {
     unlocked: reasons.length === 0,
     reasons,
@@ -335,9 +305,6 @@ export async function getFinalGateStatus(
       bestRecentMockPct,
       avgLast2MockPct,
       daysSinceLastMistakes,
-      daysSinceLastFinal,
-      cooldownDaysRemaining,
-      requiredCooldownDays,
       smokeMockCompleted,
     },
     partialRetake: partial,

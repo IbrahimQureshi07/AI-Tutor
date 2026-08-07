@@ -99,8 +99,7 @@ function GateDetail({
         {smokeQaPath && (
           <p className="mb-3 text-sm text-success">
             You finished a Mock smoke test — strict mock score and recent
-            Mistakes requirements are waived so you can try the Final. Only the
-            retake cooldown can still block you.
+            Mistakes requirements are waived so you can try the Final.
           </p>
         )}
         <div className="grid sm:grid-cols-2 gap-3 text-sm">
@@ -139,17 +138,6 @@ function GateDetail({
               smokeQaPath ||
               (d.daysSinceLastMistakes != null && d.daysSinceLastMistakes <= 30)
             }
-          />
-          <Signal
-            label="Cooldown"
-            value={
-              d.daysSinceLastFinal == null
-                ? "No prior Final"
-                : d.cooldownDaysRemaining > 0
-                  ? `${d.cooldownDaysRemaining}d remaining (of ${d.requiredCooldownDays}d)`
-                  : "Cleared"
-            }
-            ok={d.cooldownDaysRemaining === 0}
           />
         </div>
       </CardContent>

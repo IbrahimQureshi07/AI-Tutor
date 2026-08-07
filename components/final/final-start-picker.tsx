@@ -140,6 +140,11 @@ export function FinalStartPicker({ gate, pool }: Props) {
               mocks ≥75% and recent Mistakes before you rely on this score.
             </div>
           )}
+          {partial && (
+            <p className="mt-4 text-sm text-ink-muted">
+              You already passed the {partial.passedPortion === "national" ? "National" : "State"} portion — no waiting period, just finish the missing side.
+            </p>
+          )}
 
           <div className="mt-6 grid sm:grid-cols-2 gap-3">
             <PortionTile
@@ -202,7 +207,6 @@ export function FinalStartPicker({ gate, pool }: Props) {
               "Final Test is the measurement — every test you take is the same shape so the score is honest.",
               "Questions are pulled from a held-out pool you've never seen, in equal allocation per section, with the global 35/40/25 easy/medium/hard mix.",
               "Pass per portion (National + State) — combined % is shown only for reference, just like the real PSI report.",
-              "Cooldown after each attempt protects the held-out pool so future attempts stay clean.",
             ].map((b) => (
               <li key={b} className="flex gap-2">
                 <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary" />

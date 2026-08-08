@@ -30,12 +30,15 @@ type PoolStatus = {
     code: string;
     group: "National" | "State";
     unseen: number;
+    pastWrongAvailable: number;
     requested: number;
   }>;
   nationalUnseenTotal: number;
   stateUnseenTotal: number;
   nationalRequested: number;
   stateRequested: number;
+  nationalStillShort: number;
+  stateStillShort: number;
 };
 
 type Props = {
@@ -62,20 +65,17 @@ export function FinalStartPicker({ gate, pool }: Props) {
     ? partial.needPortion
     : "both";
 
-  // Pool depletion red flags.
+  // Genuine depletion red flags — sections still short even after topping
+  // up with the student's own past misses in that section (see
+  // lib/final/pick-questions.ts). Running low on brand-new questions alone
+  // is not a problem worth surfacing since it's silently backfilled.
   const lowSections = pool.bySection.filter(
-    (s) => s.unseen < s.requested && s.requested > 0,
+    (s) => s.requested > 0 && s.unseen + s.pastWrongAvailable < s.requested,
   );
   const portionUnseenShort =
-    (portion === "national" || portion === "both") &&
-    pool.nationalUnseenTotal < pool.nationalRequested
-      ? pool.nationalRequested - pool.nationalUnseenTotal
-      : 0;
+    (portion === "national" || portion === "both") ? pool.nationalStillShort : 0;
   const stateShort =
-    (portion === "state" || portion === "both") &&
-    pool.stateUnseenTotal < pool.stateRequested
-      ? pool.stateRequested - pool.stateUnseenTotal
-      : 0;
+    (portion === "state" || portion === "both") ? pool.stateStillShort : 0;
 
   async function start() {
     if (inFlight.current) return;
@@ -268,6 +268,7 @@ function PoolDepletionNote({
     code: string;
     group: "National" | "State";
     unseen: number;
+    pastWrongAvailable: number;
     requested: number;
   }>;
   poolUsed: "final_holdout" | "standard";
@@ -280,26 +281,28 @@ function PoolDepletionNote({
             <AlertTriangle className="h-4 w-4 text-warn" />
           </div>
           <div className="flex-1 text-sm">
-            <h4 className="font-semibold mb-1">Held-out pool is thin.</h4>
+            <h4 className="font-semibold mb-1">A few sections are running thin.</h4>
             <p className="text-ink-muted">
               {poolUsed === "final_holdout"
                 ? "The Final pool is dedicated held-out questions — questions you've never seen."
                 : "There's no dedicated final-holdout pool yet, so we use unseen questions from the standard bank."}{" "}
-              You&apos;ve already seen many of them.
+              You&apos;ve already seen most of them, so we top up with
+              questions you&apos;ve gotten wrong before in that section — never
+              a question you already answered correctly, and never AI-generated.
             </p>
             <ul className="mt-3 space-y-1 text-xs text-ink-muted">
               {portionUnseenShort > 0 && (
                 <li>
-                  National unseen short by{" "}
+                  National still short by{" "}
                   <span className="font-medium text-ink">{portionUnseenShort}</span>{" "}
-                  question(s).
+                  question(s) even after topping up.
                 </li>
               )}
               {stateShort > 0 && (
                 <li>
-                  State unseen short by{" "}
+                  State still short by{" "}
                   <span className="font-medium text-ink">{stateShort}</span>{" "}
-                  question(s).
+                  question(s) even after topping up.
                 </li>
               )}
               {lowSections.slice(0, 4).map((s) => (
@@ -307,14 +310,15 @@ function PoolDepletionNote({
                   <span className="font-medium text-ink">
                     {formatSectionDisplayLabel(s.code)}
                   </span>
-                  : only {s.unseen} unseen, need {s.requested}.
+                  : {s.unseen} unseen + {s.pastWrongAvailable} past-miss
+                  question(s) available, need {s.requested}.
                 </li>
               ))}
             </ul>
             <p className="mt-3 text-xs text-ink-muted">
-              You can still take the Final — it will run a few questions short
-              of the full count rather than recycle questions you&apos;ve seen.
-              The measurement remains clean.
+              You can still take the Final — it will only run a few questions
+              short of the full count if even your past misses in that section
+              run out. The measurement remains clean.
             </p>
           </div>
         </div>

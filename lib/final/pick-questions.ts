@@ -14,10 +14,14 @@ import { shuffle } from "@/lib/utils";
  *   - Section allocation is equal (largest-remainder) across the 6 sections
  *     in each portion.
  *   - Difficulty is the global 35/40/25 easy/medium/hard mix per section.
- *   - Questions come from the held-out pool ONLY. We never silently fall back
- *     to a question the user has already seen — that would contaminate the
- *     measurement. If the held-out pool is short, we surface depletion
- *     instead of substituting.
+ *   - Questions come from the held-out pool first — brand-new, never-seen
+ *     questions for that user. If a section runs short on unseen questions
+ *     (a heavy-practice student can exhaust a small section), we top up with
+ *     that same section's PAST MISSES — questions the student previously got
+ *     wrong (weakest/most-recent first), never with AI-generated questions.
+ *     This keeps every section at its full allocated count instead of
+ *     silently running the exam short, while still never recycling a
+ *     question the student already answered correctly.
  */
 export const FINAL_NATIONAL_TOTAL = 80;
 export const FINAL_STATE_TOTAL = 40;
@@ -57,6 +61,8 @@ export type FinalComposition = {
   difficultyMix: { easy: number; medium: number; hard: number };
   depletion: SectionDepletion[];
   poolUsed: "final_holdout" | "standard";
+  /** How many questions were filled from past misses (unseen pool ran short). */
+  fromPastWrongs: number;
 };
 
 export type FinalPick = {
@@ -136,6 +142,78 @@ async function fetchUserSeenQuestionIds(
   return seen;
 }
 
+/* ---------------------------- past misses ------------------------------ */
+
+type WrongRow = {
+  question_id: string;
+  last_wrong_at: string | null;
+  times_wrong: number;
+  resolved: boolean;
+};
+
+/**
+ * Every question this user has ever gotten wrong (any mode), ranked
+ * weakest-and-most-recent first. Used ONLY as a shortfall fallback when a
+ * section has no unseen questions left — see module docblock.
+ */
+async function fetchUserPastWrongs(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<WrongRow[]> {
+  const { data } = await supabase
+    .from("v_user_mistakes")
+    .select("question_id, last_wrong_at, times_wrong, resolved")
+    .eq("user_id", userId)
+    .limit(1000);
+  const rows = (data ?? []) as WrongRow[];
+  return [...rows].sort((a, b) => {
+    // Still-unresolved misses (weak spots) are more useful to re-test than
+    // ones the student has since gotten right, but both are fair game for
+    // filling a shortfall.
+    if (a.resolved !== b.resolved) return a.resolved ? 1 : -1;
+    if (b.times_wrong !== a.times_wrong) return b.times_wrong - a.times_wrong;
+    const ad = a.last_wrong_at ? new Date(a.last_wrong_at).getTime() : 0;
+    const bd = b.last_wrong_at ? new Date(b.last_wrong_at).getTime() : 0;
+    return bd - ad;
+  });
+}
+
+/**
+ * The ranked past-misses above, resolved to full question rows and grouped
+ * by section — ready to top up a thin section without touching AI-generated
+ * questions or questions the student has already gotten right.
+ */
+async function fetchPastWrongsBySection(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<Map<SectionCode, QuestionRow[]>> {
+  const ranked = await fetchUserPastWrongs(supabase, userId);
+  const ids = ranked.map((r) => r.question_id);
+  const out = new Map<SectionCode, QuestionRow[]>();
+  if (ids.length === 0) return out;
+
+  const { data } = await supabase
+    .from("questions")
+    .select("*")
+    .in("id", ids)
+    .is("parent_question_id", null)
+    .eq("is_ai_generated", false);
+
+  const byId = new Map<string, QuestionRow>(
+    ((data ?? []) as QuestionRow[]).map((q) => [q.id, q]),
+  );
+
+  for (const id of ids) {
+    const q = byId.get(id);
+    if (!q) continue;
+    const code = q.section_code as SectionCode;
+    const list = out.get(code) ?? [];
+    list.push(q);
+    out.set(code, list);
+  }
+  return out;
+}
+
 /* ---------------------------- pool detection --------------------------- */
 
 async function hasHoldoutPool(supabase: SupabaseClient): Promise<boolean> {
@@ -204,15 +282,18 @@ async function pickForSection(
   section: SectionCode,
   count: number,
   exclude: Set<string>,
-): Promise<{ picked: QuestionRow[]; available: number }> {
-  if (count <= 0) return { picked: [], available: 0 };
+  usedThisRun: Set<string>,
+  pastWrongsBySection: Map<SectionCode, QuestionRow[]>,
+): Promise<{ picked: QuestionRow[]; available: number; fromPastWrongs: number }> {
+  if (count <= 0) return { picked: [], available: 0, fromPastWrongs: 0 };
   const mix = splitDifficulty(count);
 
   const out: QuestionRow[] = [];
   const take = (rows: QuestionRow[]) => {
     for (const q of rows) {
       if (out.length >= count) break;
-      if (exclude.has(q.id)) continue;
+      if (usedThisRun.has(q.id)) continue;
+      usedThisRun.add(q.id);
       exclude.add(q.id);
       out.push(q);
     }
@@ -225,12 +306,25 @@ async function pickForSection(
   // If a difficulty bucket was thin, top up from any difficulty *within
   // the same section and pool* — section integrity is non-negotiable;
   // difficulty mix is preferred.
-  const short = count - out.length;
-  if (short > 0) {
-    take(await fetchSectionAny(supabase, pool, section, exclude, short));
+  const shortOnUnseen = count - out.length;
+  if (shortOnUnseen > 0) {
+    take(await fetchSectionAny(supabase, pool, section, exclude, shortOnUnseen));
   }
 
-  return { picked: out, available: out.length };
+  // Still short — no unseen questions left in this section for this user.
+  // Fall back to questions in this section the user previously got wrong,
+  // weakest/most-recent first. Still never AI-generated (filtered upstream).
+  const beforePastWrongs = out.length;
+  const shortAfterUnseen = count - out.length;
+  if (shortAfterUnseen > 0) {
+    const candidates = (pastWrongsBySection.get(section) ?? []).filter(
+      (q) => !usedThisRun.has(q.id),
+    );
+    take(candidates);
+  }
+  const fromPastWrongs = out.length - beforePastWrongs;
+
+  return { picked: out, available: out.length, fromPastWrongs };
 }
 
 /* ---------------------------- portion picker --------------------------- */
@@ -242,10 +336,13 @@ async function pickPortion(
   codes: readonly SectionCode[],
   exclude: Set<string>,
   group: "National" | "State",
+  usedThisRun: Set<string>,
+  pastWrongsBySection: Map<SectionCode, QuestionRow[]>,
 ): Promise<{
   questions: QuestionRow[];
   allocations: Array<{ code: SectionCode; group: "National" | "State"; count: number }>;
   depletion: SectionDepletion[];
+  fromPastWrongsTotal: number;
 }> {
   const allocation = largestRemainder(total, codes);
   const allocations: Array<{
@@ -255,11 +352,21 @@ async function pickPortion(
   }> = [];
   const depletion: SectionDepletion[] = [];
   const all: QuestionRow[] = [];
+  let fromPastWrongsTotal = 0;
 
   for (const code of codes) {
     const requested = allocation.get(code) ?? 0;
-    const { picked } = await pickForSection(supabase, pool, code, requested, exclude);
+    const { picked, fromPastWrongs } = await pickForSection(
+      supabase,
+      pool,
+      code,
+      requested,
+      exclude,
+      usedThisRun,
+      pastWrongsBySection,
+    );
     allocations.push({ code, group, count: picked.length });
+    fromPastWrongsTotal += fromPastWrongs;
     if (picked.length < requested) {
       depletion.push({
         code,
@@ -273,7 +380,7 @@ async function pickPortion(
 
   // Shuffle within the portion so adjacent questions aren't all from the
   // same section. The PSI exam doesn't group by section in display order.
-  return { questions: shuffle(all), allocations, depletion };
+  return { questions: shuffle(all), allocations, depletion, fromPastWrongsTotal };
 }
 
 /* ---------------------------- public API ------------------------------- */
@@ -298,11 +405,14 @@ export async function pickFinalQuestions(
     : "standard";
 
   const exclude = await fetchUserSeenQuestionIds(supabase, userId);
+  const usedThisRun = new Set<string>();
+  const pastWrongsBySection = await fetchPastWrongsBySection(supabase, userId);
 
   let nationalQuestions: QuestionRow[] = [];
   let stateQuestions: QuestionRow[] = [];
   const allocations: FinalComposition["sectionAllocations"] = [];
   const depletion: SectionDepletion[] = [];
+  let fromPastWrongs = 0;
 
   if (portion === "both" || portion === "national") {
     const r = await pickPortion(
@@ -312,10 +422,13 @@ export async function pickFinalQuestions(
       NATIONAL_CODES,
       exclude,
       "National",
+      usedThisRun,
+      pastWrongsBySection,
     );
     nationalQuestions = r.questions;
     allocations.push(...r.allocations);
     depletion.push(...r.depletion);
+    fromPastWrongs += r.fromPastWrongsTotal;
   }
 
   if (portion === "both" || portion === "state") {
@@ -326,10 +439,13 @@ export async function pickFinalQuestions(
       STATE_CODES,
       exclude,
       "State",
+      usedThisRun,
+      pastWrongsBySection,
     );
     stateQuestions = r.questions;
     allocations.push(...r.allocations);
     depletion.push(...r.depletion);
+    fromPastWrongs += r.fromPastWrongsTotal;
   }
 
   // Tally the actual difficulty mix (informational; we report what we got).
@@ -348,6 +464,7 @@ export async function pickFinalQuestions(
       difficultyMix,
       depletion,
       poolUsed: pool,
+      fromPastWrongs,
     },
   };
 }
@@ -367,18 +484,24 @@ export async function getFinalPoolStatus(
     code: SectionCode;
     group: "National" | "State";
     unseen: number;
+    /** Past-miss questions in this section available to top up a shortfall. */
+    pastWrongAvailable: number;
     requested: number;
   }>;
   nationalUnseenTotal: number;
   stateUnseenTotal: number;
   nationalRequested: number;
   stateRequested: number;
+  /** Still short even after topping up with past misses — a genuine gap. */
+  nationalStillShort: number;
+  stateStillShort: number;
 }> {
   const useHoldout = await hasHoldoutPool(supabase);
   const pool: "final_holdout" | "standard" = useHoldout
     ? "final_holdout"
     : "standard";
   const seen = await fetchUserSeenQuestionIds(supabase, userId);
+  const pastWrongsBySection = await fetchPastWrongsBySection(supabase, userId);
 
   const nationalAlloc = largestRemainder(FINAL_NATIONAL_TOTAL, NATIONAL_CODES);
   const stateAlloc = largestRemainder(FINAL_STATE_TOTAL, STATE_CODES);
@@ -387,11 +510,14 @@ export async function getFinalPoolStatus(
     code: SectionCode;
     group: "National" | "State";
     unseen: number;
+    pastWrongAvailable: number;
     requested: number;
   }> = [];
 
   let nationalUnseenTotal = 0;
   let stateUnseenTotal = 0;
+  let nationalStillShort = 0;
+  let stateStillShort = 0;
 
   for (const s of SECTIONS) {
     // Use head:true count then read ids only when needed. To compute
@@ -410,14 +536,22 @@ export async function getFinalPoolStatus(
       s.group === "National"
         ? (nationalAlloc.get(s.code) ?? 0)
         : (stateAlloc.get(s.code) ?? 0);
+    const pastWrongAvailable = (pastWrongsBySection.get(s.code) ?? []).length;
+    const stillShort = Math.max(0, requested - unseen - pastWrongAvailable);
     out.push({
       code: s.code,
       group: s.group as "National" | "State",
       unseen,
+      pastWrongAvailable,
       requested,
     });
-    if (s.group === "National") nationalUnseenTotal += unseen;
-    else stateUnseenTotal += unseen;
+    if (s.group === "National") {
+      nationalUnseenTotal += unseen;
+      nationalStillShort += stillShort;
+    } else {
+      stateUnseenTotal += unseen;
+      stateStillShort += stillShort;
+    }
   }
 
   return {
@@ -427,5 +561,7 @@ export async function getFinalPoolStatus(
     stateUnseenTotal,
     nationalRequested: FINAL_NATIONAL_TOTAL,
     stateRequested: FINAL_STATE_TOTAL,
+    nationalStillShort,
+    stateStillShort,
   };
 }

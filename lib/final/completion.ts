@@ -14,10 +14,15 @@ export type GateStatus = {
     avgLast2MockPct: number | null;
     /**
      * True if the user has finished at least one Mock **smoke** session.
-     * That waives the strict Mock score gate so you can exercise the Final
-     * flow without passing a full mock.
+     * Only actually waives the strict Mock score gate for admins (QA) — see
+     * `smokeUnlocksFinal`. For students this is informational only.
      */
     smokeMockCompleted: boolean;
+    /**
+     * True iff `smokeMockCompleted` is actually allowed to unlock Final for
+     * this user (admins only). Students must clear a real Mock score.
+     */
+    smokeUnlocksFinal: boolean;
   };
   /**
    * If the user passed exactly one portion in their most recent Final and
@@ -200,7 +205,9 @@ function computePartialRetake(
  *
  *   Most recent Mock score ≥ 75%   OR
  *   Average of last 2 Mocks ≥ 70%
- *   OR (QA) at least one **finished Mock smoke** session — any score.
+ *   OR (admin/QA only) at least one **finished Mock smoke** session — any
+ *   score. Smoke runs are a quick practice/QA shortcut; students must clear
+ *   a real Mock score to unlock the Final — a smoke run never does.
  *
  * No cooldown between attempts and no separate recent-Mistakes requirement —
  * the held-out/unseen-pool check on the question picker already guards
@@ -214,6 +221,7 @@ function computePartialRetake(
 export async function getFinalGateStatus(
   supabase: SupabaseClient,
   userId: string,
+  isAdmin: boolean = false,
 ): Promise<GateStatus> {
   const now = new Date();
   const [mocks, finals, smokeMockCompleted] = await Promise.all([
@@ -239,7 +247,8 @@ export async function getFinalGateStatus(
   const mockOkStrict =
     (bestRecentMockPct != null && bestRecentMockPct >= 75) ||
     (avgLast2MockPct != null && avgLast2MockPct >= 70);
-  const mockOkQa = smokeMockCompleted;
+  const smokeUnlocksFinal = isAdmin;
+  const mockOkQa = smokeMockCompleted && smokeUnlocksFinal;
 
   const reasons: string[] = [];
 
@@ -248,9 +257,13 @@ export async function getFinalGateStatus(
   if (!partial?.active) {
     if (!mockOkStrict && !mockOkQa) {
       reasons.push(
-        bestRecentMockPct == null
-          ? "Take at least one Mock Exam first (full mock ≥70–75% or finish a smoke mock to open Final for testing)."
-          : `Need a Mock score ≥75% (most recent: ${Math.round(bestRecentMockPct)}%), average ≥70% over last 2, or finish a Mock smoke test for QA access.`,
+        isAdmin
+          ? bestRecentMockPct == null
+            ? "Take at least one Mock Exam first (full mock ≥70–75% or finish a smoke mock to open Final for testing)."
+            : `Need a Mock score ≥75% (most recent: ${Math.round(bestRecentMockPct)}%), average ≥70% over last 2, or finish a Mock smoke test for QA access.`
+          : bestRecentMockPct == null
+            ? "Take at least one full Mock Exam first (≥70–75%) to unlock the Final Test."
+            : `Need a Mock score ≥75% (most recent: ${Math.round(bestRecentMockPct)}%) or average ≥70% over your last 2 mocks to unlock the Final Test.`,
       );
     }
   }
@@ -262,6 +275,7 @@ export async function getFinalGateStatus(
       bestRecentMockPct,
       avgLast2MockPct,
       smokeMockCompleted,
+      smokeUnlocksFinal,
     },
     partialRetake: partial,
   };

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { startSession } from "@/lib/runner/session";
 import { createClient } from "@/lib/supabase/server";
+import { isUserAdmin } from "@/lib/auth/bootstrap-admin";
 import { getFinalGateStatus } from "@/lib/final/completion";
 import {
   pickFinalQuestions,
@@ -32,7 +33,8 @@ export async function POST(req: Request) {
   let portion: "both" | Portion = parsed.success ? parsed.data.portion : "both";
 
   // Gate check + partial-retake enforcement.
-  const gate = await getFinalGateStatus(supabase, user.id);
+  const isAdmin = await isUserAdmin(supabase, user);
+  const gate = await getFinalGateStatus(supabase, user.id, isAdmin);
   // Partial-retake mode forces the missing portion regardless of request.
   if (gate.partialRetake?.active) {
     portion = gate.partialRetake.needPortion;

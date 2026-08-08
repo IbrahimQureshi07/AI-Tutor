@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { isUserAdmin } from "@/lib/auth/bootstrap-admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,8 +17,9 @@ export default async function FinalTestIntro() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const isAdmin = await isUserAdmin(supabase, user);
   const [gate, pool] = await Promise.all([
-    getFinalGateStatus(supabase, user.id),
+    getFinalGateStatus(supabase, user.id, isAdmin),
     getFinalPoolStatus(supabase, user.id),
   ]);
 
@@ -88,7 +90,10 @@ function GateDetail({
   const strictMock =
     (d.bestRecentMockPct != null && d.bestRecentMockPct >= 75) ||
     (d.avgLast2MockPct != null && d.avgLast2MockPct >= 70);
-  const smokeQaPath = d.smokeMockCompleted && !strictMock;
+  const smokeQaPath = d.smokeMockCompleted && d.smokeUnlocksFinal && !strictMock;
+  // Smoke finished but didn't unlock (not an admin) — explain why, so it
+  // doesn't look like a bug.
+  const smokeDidNotUnlock = d.smokeMockCompleted && !d.smokeUnlocksFinal && !strictMock;
   return (
     <Card className="mt-5">
       <CardContent className="pt-5">
@@ -100,6 +105,13 @@ function GateDetail({
           <p className="mb-3 text-sm text-success">
             You finished a Mock smoke test — strict mock score requirements
             are waived so you can try the Final.
+          </p>
+        )}
+        {smokeDidNotUnlock && (
+          <p className="mb-3 text-sm text-ink-muted">
+            Heads up: a Mock <strong>smoke test</strong> is quick
+            practice/QA only — it doesn&apos;t unlock the Final Test. Take a
+            full Mock Exam to unlock it.
           </p>
         )}
         <div className="grid sm:grid-cols-2 gap-3 text-sm">

@@ -31,6 +31,8 @@ type Props = {
   weakest: WeakPreview[];
   /** Total attempts used to derive the weakness signal. */
   signalSize: number;
+  /** Admins get a QA note that smoke also unlocks Final; students don't. */
+  isAdmin?: boolean;
 };
 
 const SMOKE_DURATION_MIN = Math.max(
@@ -38,7 +40,7 @@ const SMOKE_DURATION_MIN = Math.max(
   Math.round((MOCK_SMOKE_TOTAL / MOCK_TOTAL) * MOCK_DURATION_MIN),
 );
 
-export function MockStartPicker({ weakest, signalSize }: Props) {
+export function MockStartPicker({ weakest, signalSize, isAdmin = false }: Props) {
   const router = useRouter();
   const [length, setLength] = React.useState<Length>("full");
   const [busy, setBusy] = React.useState(false);
@@ -103,7 +105,9 @@ export function MockStartPicker({ weakest, signalSize }: Props) {
       bullets: [
         "Identical adaptive logic, ~1/6 the length",
         "Pass bar stays at 70%",
-        "Great QA before the real mock",
+        isAdmin
+          ? "Great QA before the real mock — also unlocks Final Test for testing"
+          : "Practice/QA only — doesn't unlock the Final Test. Take a full Mock Exam for that.",
       ],
     },
   ];

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { isUserAdmin } from "@/lib/auth/bootstrap-admin";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Lock, ArrowRight } from "lucide-react";
@@ -75,11 +76,16 @@ export default async function MockExamIntro() {
     );
   }
 
-  const { weakest, signalSize } = await getMockWeaknessPreview(
-    supabase,
-    user.id,
-    3,
-  );
+  const [{ weakest, signalSize }, isAdmin] = await Promise.all([
+    getMockWeaknessPreview(supabase, user.id, 3),
+    isUserAdmin(supabase, user),
+  ]);
 
-  return <MockStartPicker weakest={weakest} signalSize={signalSize} />;
+  return (
+    <MockStartPicker
+      weakest={weakest}
+      signalSize={signalSize}
+      isAdmin={isAdmin}
+    />
+  );
 }

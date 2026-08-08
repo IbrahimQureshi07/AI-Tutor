@@ -57,7 +57,10 @@ export function FinalStartPicker({ gate, pool }: Props) {
     (gate.details.avgLast2MockPct != null &&
       gate.details.avgLast2MockPct >= 70);
   const smokeQaUnlock =
-    gate.details.smokeMockCompleted && !strictMock && !gate.partialRetake?.active;
+    gate.details.smokeMockCompleted &&
+    gate.details.smokeUnlocksFinal &&
+    !strictMock &&
+    !gate.partialRetake?.active;
 
   const partial = gate.partialRetake?.active ? gate.partialRetake : null;
   // Lock the picker if partial retake is active — there's only one valid action.

@@ -2,7 +2,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { MOCK_SMOKE_TOTAL } from "@/lib/mock/pick-questions";
 import { FINAL_PASS_PCT, type Portion } from "@/lib/final/pick-questions";
 
-const RECENT_MISTAKES_DAYS = 30;
 const PARTIAL_RETAKE_WINDOW_DAYS = 180; // SC PSI gives 6 months to pass the remaining portion.
 
 /* ------------------------------ types ----------------------------------- */
@@ -13,11 +12,10 @@ export type GateStatus = {
   details: {
     bestRecentMockPct: number | null;
     avgLast2MockPct: number | null;
-    daysSinceLastMistakes: number | null;
     /**
      * True if the user has finished at least one Mock **smoke** session.
-     * That waives the strict Mock score + recent Mistakes gates so you can
-     * exercise the Final flow without passing a full mock.
+     * That waives the strict Mock score gate so you can exercise the Final
+     * flow without passing a full mock.
      */
     smokeMockCompleted: boolean;
   };
@@ -103,23 +101,6 @@ async function hasFinishedSmokeMock(
     }
   }
   return false;
-}
-
-async function getMostRecentMistakes(
-  supabase: SupabaseClient,
-  userId: string,
-): Promise<{ finished_at: string | null } | null> {
-  const { data } = await supabase
-    .from("sessions")
-    .select("finished_at")
-    .eq("user_id", userId)
-    .eq("mode", "mistakes")
-    .eq("status", "finished")
-    .not("finished_at", "is", null)
-    .order("finished_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return (data ?? null) as { finished_at: string | null } | null;
 }
 
 /**
@@ -215,19 +196,16 @@ function computePartialRetake(
 /**
  * Gate logic for Final Test access.
  *
- * Conditions ALL must be met (unless partial-retake is active):
+ * Condition to unlock (unless partial-retake is active):
  *
- *   1. Most recent Mock score ≥ 75%   OR
- *      Average of last 2 Mocks ≥ 70%
- *      OR (QA) at least one **finished Mock smoke** session — any score.
+ *   Most recent Mock score ≥ 75%   OR
+ *   Average of last 2 Mocks ≥ 70%
+ *   OR (QA) at least one **finished Mock smoke** session — any score.
  *
- *   2. At least one Mistakes session finished in the last 30 days
- *      (waived if (1) satisfied via smoke-mock QA path).
- *
- * No cooldown between attempts — the held-out/unseen-pool check on the
- * question picker already guards against re-serving seen questions, so a
- * time-based retake lock isn't needed and only frustrates students who are
- * ready to try again immediately.
+ * No cooldown between attempts and no separate recent-Mistakes requirement —
+ * the held-out/unseen-pool check on the question picker already guards
+ * against re-serving seen questions, so extra time-based gates just add
+ * friction without protecting the measurement.
  *
  * Partial-retake mode is allowed regardless of new Mock scores — the user
  * already proved readiness for one portion; we just want a fresh attempt
@@ -238,9 +216,8 @@ export async function getFinalGateStatus(
   userId: string,
 ): Promise<GateStatus> {
   const now = new Date();
-  const [mocks, mistakes, finals, smokeMockCompleted] = await Promise.all([
+  const [mocks, finals, smokeMockCompleted] = await Promise.all([
     getRecentMockSessions(supabase, userId, 5),
-    getMostRecentMistakes(supabase, userId),
     getFinishedFinalSessions(supabase, userId),
     hasFinishedSmokeMock(supabase, userId),
   ]);
@@ -257,10 +234,6 @@ export async function getFinalGateStatus(
         ? mockPcts[0]
         : null;
 
-  const daysSinceLastMistakes = mistakes?.finished_at
-    ? daysBetween(now, new Date(mistakes.finished_at))
-    : null;
-
   const partial = computePartialRetake(finals, now);
 
   const mockOkStrict =
@@ -270,7 +243,7 @@ export async function getFinalGateStatus(
 
   const reasons: string[] = [];
 
-  // Gate 1: Mock readiness — only enforced if we're NOT in a partial-retake
+  // Gate: Mock readiness — only enforced if we're NOT in a partial-retake
   // window (in which case the user already cleared the bar).
   if (!partial?.active) {
     if (!mockOkStrict && !mockOkQa) {
@@ -282,29 +255,12 @@ export async function getFinalGateStatus(
     }
   }
 
-  // Gate 2: Recent Mistakes activity — relaxed in partial-retake (you've
-  // already validated readiness for one side). Also waived when smoke-mock
-  // QA path satisfied gate 1 (so you can test Final without a fresh Mistakes).
-  if (!partial?.active) {
-    const mistakesWaived = smokeMockCompleted && !mockOkStrict;
-    if (
-      !mistakesWaived &&
-      (daysSinceLastMistakes == null ||
-        daysSinceLastMistakes > RECENT_MISTAKES_DAYS)
-    ) {
-      reasons.push(
-        `Run a Mistakes Test in the last ${RECENT_MISTAKES_DAYS} days for recent recall signal.`,
-      );
-    }
-  }
-
   return {
     unlocked: reasons.length === 0,
     reasons,
     details: {
       bestRecentMockPct,
       avgLast2MockPct,
-      daysSinceLastMistakes,
       smokeMockCompleted,
     },
     partialRetake: partial,

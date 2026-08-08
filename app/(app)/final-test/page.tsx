@@ -98,8 +98,8 @@ function GateDetail({
         </h4>
         {smokeQaPath && (
           <p className="mb-3 text-sm text-success">
-            You finished a Mock smoke test — strict mock score and recent
-            Mistakes requirements are waived so you can try the Final.
+            You finished a Mock smoke test — strict mock score requirements
+            are waived so you can try the Final.
           </p>
         )}
         <div className="grid sm:grid-cols-2 gap-3 text-sm">
@@ -124,20 +124,6 @@ function GateDetail({
                   : `${d.avgLast2MockPct}% (need ≥70%)`
             }
             ok={strictMock || smokeQaPath}
-          />
-          <Signal
-            label="Mistakes Test recency"
-            value={
-              smokeQaPath
-                ? "Not required (smoke QA)"
-                : d.daysSinceLastMistakes == null
-                  ? "Never run"
-                  : `${d.daysSinceLastMistakes}d ago (need within 30d)`
-            }
-            ok={
-              smokeQaPath ||
-              (d.daysSinceLastMistakes != null && d.daysSinceLastMistakes <= 30)
-            }
           />
         </div>
       </CardContent>

@@ -136,8 +136,8 @@ export function FinalStartPicker({ gate, pool }: Props) {
             <div className="mt-4 rounded-2xl border border-success/30 bg-success/5 px-4 py-3 text-sm text-ink-muted">
               <span className="font-medium text-success">QA access:</span> you
               unlocked Final by finishing a Mock <strong>smoke</strong> run (no
-              score requirement). For the real exam path, still aim for full
-              mocks ≥75% and recent Mistakes before you rely on this score.
+              score requirement). For the real exam path, still aim for a full
+              mock ≥75% before you rely on this score.
             </div>
           )}
           {partial && (

@@ -11,7 +11,7 @@ export function getModel() {
         "AI_PROVIDER is set to openai but OPENAI_API_KEY is missing.",
       );
     }
-    return openai(process.env.OPENAI_MODEL ?? "gpt-4o-mini");
+    return openai(process.env.OPENAI_MODEL ?? "gpt-5.6-terra");
   }
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error(

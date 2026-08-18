@@ -47,7 +47,7 @@ const PASS = 70;
 const s = StyleSheet.create({
   page: {
     backgroundColor: C.bg,
-    paddingBottom: 44,
+    paddingBottom: 60,
     fontFamily: "Helvetica",
     fontSize: 9,
     color: C.ink,
@@ -362,6 +362,7 @@ export function StudentReportPdf({
         </View>
 
         <View style={s.body}>
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Lifetime · All Question Attempts</Text>
           <Text style={[s.noteText, { marginBottom: 8 }]}>
             Every question answered — smoke, partial, or complete. Not finished exam scores.
@@ -423,7 +424,9 @@ export function StudentReportPdf({
               <Text style={s.statLabel}>Study Time{"\n"}(30d)</Text>
             </View>
           </View>
+          </View>
 
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Finished Test Scores</Text>
           <Text style={[s.noteText, { marginBottom: 8 }]}>
             Only sessions with status = finished. Partial or in-progress runs excluded.
@@ -458,7 +461,9 @@ export function StudentReportPdf({
               ))}
             </View>
           )}
+          </View>
 
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Session Breakdown by Mode & Type</Text>
           <Text style={[s.noteText, { marginBottom: 8 }]}>
             Run counts by mode and type (smoke, full, etc.) — finished vs partial.
@@ -485,6 +490,7 @@ export function StudentReportPdf({
               ))}
             </View>
           )}
+          </View>
         </View>
 
         <View style={s.footer} fixed>
@@ -495,13 +501,16 @@ export function StudentReportPdf({
 
       <Page size="A4" style={s.page}>
         <View style={s.body}>
+          <View wrap={false}>
           <Text style={[s.sectionTitle, { marginTop: 18 }]}>Section-by-Section Breakdown</Text>
           <Text style={[s.noteText, { marginBottom: 8 }]}>
             Per-section lifetime question accuracy (any mode).
           </Text>
           <SectionTable title="National Section" rows={national} accent={C.national} accentLight={C.nationalLight} />
           <SectionTable title="SC State Section" rows={state} accent={C.state} accentLight={C.stateLight} />
+          </View>
 
+          <View wrap={false}>
           <View style={s.twoCol}>
             <View style={s.listCard}>
               <Text style={[s.listTitle, { color: C.success }]}>Top Strengths</Text>
@@ -529,6 +538,7 @@ export function StudentReportPdf({
                 ))
               )}
             </View>
+          </View>
           </View>
         </View>
 

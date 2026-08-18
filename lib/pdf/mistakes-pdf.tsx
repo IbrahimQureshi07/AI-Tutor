@@ -35,7 +35,7 @@ const C = {
 const s = StyleSheet.create({
   page: {
     backgroundColor: C.bg,
-    paddingBottom: 44,
+    paddingBottom: 60,
     fontFamily: "Helvetica",
     fontSize: 9,
     color: C.ink,
@@ -371,6 +371,7 @@ export function MistakesPdf({
         <View style={s.body}>
 
           {/* ── OVERALL PERFORMANCE ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Overall Recovery Performance</Text>
           <View style={s.overviewRow}>
             <ScoreDonut pct={stats.accuracy_pct} />
@@ -419,8 +420,10 @@ export function MistakesPdf({
               </View>
             </View>
           </View>
+          </View>
 
           {/* ── KPI CARDS ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Key Metrics</Text>
           <View style={s.kpiRow}>
             <View style={[s.kpiCard, { borderColor: stats.accuracy_pct >= 70 ? C.success : C.border }]}>
@@ -454,10 +457,11 @@ export function MistakesPdf({
               </Text>
             </View>
           </View>
+          </View>
 
           {/* ── SECTION BREAKDOWN ── */}
           {stats.bySection.length > 0 && (
-            <>
+            <View wrap={false}>
               <Text style={s.sectionTitle}>Section Recovery Breakdown</Text>
               <View style={s.sectionTable}>
                 <View style={s.tableHeader}>
@@ -489,10 +493,11 @@ export function MistakesPdf({
                   );
                 })}
               </View>
-            </>
+            </View>
           )}
 
           {/* ── DIFFICULTY ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Recovery by Difficulty</Text>
           <View style={s.diffRow}>
             {stats.byDifficulty.map((d) => {
@@ -516,8 +521,10 @@ export function MistakesPdf({
               );
             })}
           </View>
+          </View>
 
           {/* ── SPEED ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Speed Breakdown</Text>
           <View style={s.speedRow}>
             <View style={s.speedCard}>
@@ -545,15 +552,16 @@ export function MistakesPdf({
               <Text style={s.speedSub}>May need deeper review</Text>
             </View>
           </View>
+          </View>
 
           {/* ── AI NOTE ── */}
           {aiNote && aiNote.length > 10 && (
-            <>
+            <View wrap={false}>
               <Text style={s.sectionTitle}>AI Tutor Feedback</Text>
               <View style={s.aiNoteBox}>
                 <Text style={s.aiNoteText}>{aiNote.replace(/[*#`]/g, "").trim()}</Text>
               </View>
-            </>
+            </View>
           )}
 
         </View>

@@ -40,7 +40,7 @@ const C = {
 const s = StyleSheet.create({
   page: {
     backgroundColor: C.bg,
-    paddingBottom: 40,
+    paddingBottom: 60,
     fontFamily: "Helvetica",
     fontSize: 9,
     color: C.ink,
@@ -426,6 +426,7 @@ export function AssessmentPdf({
 
         <View style={s.body}>
           {/* ── OVERVIEW ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Overall Performance</Text>
           <View style={s.overviewRow}>
             {/* Score donut */}
@@ -491,8 +492,10 @@ export function AssessmentPdf({
               </View>
             </View>
           </View>
+          </View>
 
           {/* ── SECTION BREAKDOWN ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Section Breakdown</Text>
           <View style={s.sectionsGrid}>
             {summary.sections.map((sec) => {
@@ -554,8 +557,10 @@ export function AssessmentPdf({
               );
             })}
           </View>
+          </View>
 
           {/* ── PASS PREDICTIONS ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Exam Pass Prediction</Text>
           <View style={s.predictionsRow}>
             <View style={s.predCard}>
@@ -607,10 +612,11 @@ export function AssessmentPdf({
               </Text>
             </View>
           </View>
+          </View>
 
           {/* ── WEAK CONCEPTS ── */}
           {summary.weakest_concepts.length > 0 && (
-            <>
+            <View wrap={false}>
               <Text style={s.sectionTitle}>Top Areas to Review</Text>
               <View style={s.conceptsBox}>
                 {summary.weakest_concepts.slice(0, 6).map((c, i) => {
@@ -646,19 +652,19 @@ export function AssessmentPdf({
                   );
                 })}
               </View>
-            </>
+            </View>
           )}
 
           {/* ── AI TUTOR LETTER ── */}
           {tutorLetter && (
-            <>
+            <View wrap={false}>
               <Text style={s.sectionTitle}>AI Tutor Feedback</Text>
               <View style={s.tutorBox}>
                 <Text style={s.tutorText}>
                   {tutorLetter.replace(/[*#`]/g, "").trim()}
                 </Text>
               </View>
-            </>
+            </View>
           )}
         </View>
 

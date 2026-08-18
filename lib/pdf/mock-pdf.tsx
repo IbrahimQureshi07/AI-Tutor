@@ -36,7 +36,7 @@ const C = {
 const s = StyleSheet.create({
   page: {
     backgroundColor: C.bg,
-    paddingBottom: 44,
+    paddingBottom: 60,
     fontFamily: "Helvetica",
     fontSize: 9,
     color: C.ink,
@@ -443,6 +443,7 @@ export function MockPdf({
         <View style={s.body}>
 
           {/* ── SCORE HERO ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Exam Result</Text>
           <View style={s.heroRow}>
             <View style={s.heroScoreBlock}>
@@ -499,8 +500,10 @@ export function MockPdf({
               )}
             </View>
           </View>
+          </View>
 
           {/* ── PORTION BREAKDOWN ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>National vs State Breakdown</Text>
           <View style={s.portionsRow}>
             {/* National */}
@@ -551,8 +554,10 @@ export function MockPdf({
               </View>
             </View>
           </View>
+          </View>
 
           {/* ── SECTION TABLE ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Section-by-Section Breakdown</Text>
 
           {/* National sections */}
@@ -618,8 +623,10 @@ export function MockPdf({
               })}
             </View>
           )}
+          </View>
 
           {/* ── DIFFICULTY ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Performance by Difficulty</Text>
           <View style={s.diffRow}>
             {(["easy", "medium", "hard"] as const).map((level) => {
@@ -643,8 +650,10 @@ export function MockPdf({
               );
             })}
           </View>
+          </View>
 
           {/* ── VERDICT ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Verdict & Next Steps</Text>
           <View style={[s.verdictCard, {
             borderColor: passed ? "#B0D8BE" : verdict.kind === "close" ? "#E8D0A0" : "#EAB8A8",
@@ -664,15 +673,16 @@ export function MockPdf({
               </View>
             )}
           </View>
+          </View>
 
           {/* ── AI NOTE ── */}
           {aiNote && aiNote.length > 10 && (
-            <>
+            <View wrap={false}>
               <Text style={s.sectionTitle}>AI Tutor Feedback</Text>
               <View style={s.aiNoteBox}>
                 <Text style={s.aiNoteText}>{aiNote.replace(/[*#`]/g, "").trim()}</Text>
               </View>
-            </>
+            </View>
           )}
 
         </View>

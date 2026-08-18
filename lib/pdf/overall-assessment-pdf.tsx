@@ -41,7 +41,7 @@ const C = {
 const s = StyleSheet.create({
   page: {
     backgroundColor: C.bg,
-    paddingBottom: 44,
+    paddingBottom: 60,
     fontFamily: "Helvetica",
     fontSize: 9,
     color: C.ink,
@@ -559,6 +559,7 @@ export function OverallAssessmentPdf({
         <View style={s.body}>
 
           {/* ── OVERALL PERFORMANCE ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Overall Performance</Text>
           <View style={s.overviewRow}>
             <ScoreDonut pct={summary.accuracy_pct} />
@@ -607,8 +608,10 @@ export function OverallAssessmentPdf({
               </View>
             </View>
           </View>
+          </View>
 
           {/* ── SECTION COMPARISON TABLE ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Section-by-Section Comparison</Text>
 
           {/* National */}
@@ -686,8 +689,10 @@ export function OverallAssessmentPdf({
               );
             })}
           </View>
+          </View>
 
           {/* ── EXAM PASS PREDICTION ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Exam Pass Prediction</Text>
           <View style={s.portionsRow}>
             {/* National */}
@@ -757,12 +762,14 @@ export function OverallAssessmentPdf({
               </View>
             </View>
           </View>
+          </View>
 
           {/* ── HIGHLIGHTS ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Section Highlights</Text>
           <View style={s.highlightsRow}>
             {/* Strongest sections */}
-            <View style={s.highlightCard}>
+            <View wrap={false} style={s.highlightCard}>
               <Text style={s.highlightTitle}>Top Performing Sections</Text>
               {[...summary.sections]
                 .filter(s => s.total > 0)
@@ -779,7 +786,7 @@ export function OverallAssessmentPdf({
             </View>
 
             {/* Weakest sections */}
-            <View style={s.highlightCard}>
+            <View wrap={false} style={s.highlightCard}>
               <Text style={s.highlightTitle}>Sections Needing Focus</Text>
               {[...summary.sections]
                 .filter(s => s.total > 0)
@@ -795,10 +802,11 @@ export function OverallAssessmentPdf({
                 ))}
             </View>
           </View>
+          </View>
 
           {/* ── WEAK CONCEPTS ── */}
           {summary.weakest_concepts.length > 0 && (
-            <>
+            <View wrap={false}>
               <Text style={s.sectionTitle}>Top Concepts to Review</Text>
               <View style={s.conceptsBox}>
                 {summary.weakest_concepts.slice(0, 6).map((c, i, arr) => {
@@ -820,17 +828,17 @@ export function OverallAssessmentPdf({
                   );
                 })}
               </View>
-            </>
+            </View>
           )}
 
           {/* ── AI TUTOR LETTER ── */}
           {tutorLetter && (
-            <>
+            <View wrap={false}>
               <Text style={s.sectionTitle}>AI Tutor Feedback</Text>
               <View style={s.tutorBox}>
                 <Text style={s.tutorText}>{tutorLetter.replace(/[*#`]/g, "").trim()}</Text>
               </View>
-            </>
+            </View>
           )}
 
         </View>

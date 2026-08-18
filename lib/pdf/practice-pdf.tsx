@@ -38,7 +38,7 @@ const C = {
 const s = StyleSheet.create({
   page: {
     backgroundColor: C.bg,
-    paddingBottom: 44,
+    paddingBottom: 60,
     fontFamily: "Helvetica",
     fontSize: 9,
     color: C.ink,
@@ -428,6 +428,7 @@ export function PracticePdf({
         <View style={s.body}>
 
           {/* ── OVERALL PERFORMANCE ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Overall Performance</Text>
           <View style={s.overviewRow}>
             <ScoreDonut pct={stats.strict_pct} />
@@ -476,8 +477,10 @@ export function PracticePdf({
               </View>
             </View>
           </View>
+          </View>
 
           {/* ── KPI CARDS ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Key Performance Indicators</Text>
           <View style={s.kpiRow}>
             <View style={s.kpiCard}>
@@ -509,10 +512,11 @@ export function PracticePdf({
               <Text style={s.kpiSub}>{stats.sibling_recovered}/{stats.sibling_attempts} recovered</Text>
             </View>
           </View>
+          </View>
 
           {/* ── SECTION BREAKDOWN ── */}
           {stats.bySection.length > 0 && (
-            <>
+            <View wrap={false}>
               <Text style={s.sectionTitle}>Section Breakdown</Text>
               <View style={s.sectionTable}>
                 <View style={s.tableHeader}>
@@ -544,10 +548,11 @@ export function PracticePdf({
                   );
                 })}
               </View>
-            </>
+            </View>
           )}
 
           {/* ── DIFFICULTY BREAKDOWN ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Difficulty Breakdown</Text>
           <View style={s.diffRow}>
             {stats.byDifficulty.map((d) => {
@@ -571,8 +576,10 @@ export function PracticePdf({
               );
             })}
           </View>
+          </View>
 
           {/* ── COACHING & RECOVERY ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>AI Coaching & Recovery</Text>
           <View style={s.coachRow}>
             <View style={s.coachCard}>
@@ -598,15 +605,16 @@ export function PracticePdf({
               <Text style={s.coachSub}>Slowest: {stats.slowest_ms ? fmtMs(stats.slowest_ms) : "—"}</Text>
             </View>
           </View>
+          </View>
 
           {/* ── AI NOTE ── */}
           {aiNote && aiNote.length > 10 && (
-            <>
+            <View wrap={false}>
               <Text style={s.sectionTitle}>AI Tutor Feedback</Text>
               <View style={s.aiNoteBox}>
                 <Text style={s.aiNoteText}>{aiNote.replace(/[*#`]/g, "").trim()}</Text>
               </View>
-            </>
+            </View>
           )}
 
         </View>

@@ -41,7 +41,7 @@ const C = {
 const s = StyleSheet.create({
   page: {
     backgroundColor: C.bg,
-    paddingBottom: 44,
+    paddingBottom: 60,
     fontFamily: "Helvetica",
     fontSize: 9,
     color: C.ink,
@@ -579,6 +579,7 @@ export function FinalPdf({
 
         <View style={s.body}>
           {/* ── SCORE HERO ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Exam Score Summary</Text>
           <View style={s.heroBox}>
             {/* Left: overall verdict */}
@@ -664,8 +665,10 @@ export function FinalPdf({
               </View>
             )}
           </View>
+          </View>
 
           {/* ── VERDICT ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Verdict & Recommendation</Text>
           <View style={[s.verdictBox, {
             backgroundColor: verdict.bgColor,
@@ -704,8 +707,10 @@ export function FinalPdf({
               </View>
             )}
           </View>
+          </View>
 
           {/* ── SECTION TABLE ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Section-by-Section Breakdown</Text>
 
           {nationalSections.length > 0 && (
@@ -769,6 +774,7 @@ export function FinalPdf({
               })}
             </View>
           )}
+          </View>
         </View>
 
         {/* Footer */}
@@ -799,6 +805,7 @@ export function FinalPdf({
 
         <View style={s.body}>
           {/* ── STAGE SUMMARY CARDS ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Performance by Stage</Text>
           <View style={s.stageGrid}>
             {(["assessment", "practice", "mistakes", "mock"] as const).map((mode) => {
@@ -864,10 +871,11 @@ export function FinalPdf({
               );
             })}
           </View>
+          </View>
 
           {/* ── RECENT SESSION TIMELINE ── */}
           {timeline.length > 0 && (
-            <>
+            <View wrap={false}>
               <Text style={s.sectionTitle}>Recent Session Timeline</Text>
               <View style={s.timelineBox}>
                 {timeline.map((pt, i) => {
@@ -898,10 +906,11 @@ export function FinalPdf({
                   );
                 })}
               </View>
-            </>
+            </View>
           )}
 
           {/* ── FINAL EXAM CONTEXT ── */}
+          <View wrap={false}>
           <Text style={s.sectionTitle}>Final Exam Context</Text>
           <View style={{
             backgroundColor: C.surface,
@@ -967,6 +976,7 @@ export function FinalPdf({
                 </>
               )}
             </View>
+          </View>
           </View>
 
         </View>

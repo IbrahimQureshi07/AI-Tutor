@@ -344,7 +344,7 @@ export function AssessmentRunner({
 
           {/* HINT panel */}
           <AnimatePresence>
-            {(s.phase === "hint" || (showFeedback && s.hint)) && (
+            {(s.phase === "hint" || s.hintLoading || !!s.hint) && (
               <motion.div
                 key="hint"
                 initial={{ opacity: 0, height: 0 }}

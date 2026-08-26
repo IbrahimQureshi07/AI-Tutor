@@ -335,14 +335,81 @@ function summarizeAttempts(
   const total = plannedTotal(config);
   const primary = attempts.filter((a) => !a.is_sibling);
   const answeredIds = new Set(
-    primary.filter((a) => a.user_answer != null).map((a) => a.question_id),
+    primary
+      .filter((a) => a.user_answer != null && String(a.user_answer).trim() !== "")
+      .map((a) => a.question_id),
   );
+  // Prefer distinct answered questions. If every row is a null-answer
+  // placeholder (exam skip recording), fall back to primary row count so a
+  // finished graded session never shows "0 / N" when attempts exist.
+  const answered =
+    answeredIds.size > 0 ? answeredIds.size : primary.length > 0 ? primary.length : 0;
   const correct = primary.filter((a) => a.is_correct).length;
-  return {
-    answered: answeredIds.size || primary.length,
-    correct,
-    total,
-  };
+  return { answered, correct, total };
+}
+
+/**
+ * Load attempts for many sessions. PostgREST silently truncates large
+ * responses and a missing `is_sibling` column used to empty the whole
+ * result (answered always 0). Chunk + high limit + column fallback.
+ */
+async function loadAttemptsBySession(
+  client: SupabaseClient,
+  userId: string,
+  sessionIds: string[],
+): Promise<Map<string, RawAttempt[]>> {
+  const map = new Map<string, RawAttempt[]>();
+  if (sessionIds.length === 0) return map;
+
+  const CHUNK = 25;
+  const ROW_LIMIT = 20_000;
+
+  for (let i = 0; i < sessionIds.length; i += CHUNK) {
+    const chunk = sessionIds.slice(i, i + CHUNK);
+
+    let rows: Array<RawAttempt & { session_id: string }> | null = null;
+
+    const full = await client
+      .from("attempts")
+      .select("session_id, question_id, user_answer, is_correct, is_sibling")
+      .eq("user_id", userId)
+      .in("session_id", chunk)
+      .limit(ROW_LIMIT);
+
+    if (full.error) {
+      console.error(
+        "[session-history] attempts fetch failed; retrying without is_sibling:",
+        full.error.message,
+      );
+      const fallback = await client
+        .from("attempts")
+        .select("session_id, question_id, user_answer, is_correct")
+        .eq("user_id", userId)
+        .in("session_id", chunk)
+        .limit(ROW_LIMIT);
+      if (fallback.error) {
+        console.error(
+          "[session-history] attempts fallback fetch failed:",
+          fallback.error.message,
+        );
+        continue;
+      }
+      rows = (fallback.data ?? []).map((r) => ({
+        ...(r as RawAttempt & { session_id: string }),
+        is_sibling: false,
+      }));
+    } else {
+      rows = (full.data ?? []) as Array<RawAttempt & { session_id: string }>;
+    }
+
+    for (const row of rows) {
+      const list = map.get(row.session_id) ?? [];
+      list.push(row);
+      map.set(row.session_id, list);
+    }
+  }
+
+  return map;
 }
 
 export async function loadSessionHistory(
@@ -351,7 +418,7 @@ export async function loadSessionHistory(
   opts?: { limit?: number },
 ): Promise<SessionHistoryRow[]> {
   const limit = opts?.limit ?? 100;
-  const { data: sessions } = await client
+  const { data: sessions, error: sessionsError } = await client
     .from("sessions")
     .select(
       "id, mode, status, started_at, finished_at, score_pct, duration_ms, config",
@@ -360,28 +427,39 @@ export async function loadSessionHistory(
     .order("started_at", { ascending: false })
     .limit(limit);
 
+  if (sessionsError) {
+    console.error("[session-history] sessions fetch failed:", sessionsError.message);
+    return [];
+  }
   if (!sessions?.length) return [];
 
   const sessionIds = sessions.map((s) => s.id as string);
-  const { data: attemptRows } = await client
-    .from("attempts")
-    .select("session_id, question_id, user_answer, is_correct, is_sibling")
-    .eq("user_id", userId)
-    .in("session_id", sessionIds);
-
-  const attemptsBySession = new Map<string, RawAttempt[]>();
-  for (const row of (attemptRows ?? []) as Array<
-    RawAttempt & { session_id: string }
-  >) {
-    const list = attemptsBySession.get(row.session_id) ?? [];
-    list.push(row);
-    attemptsBySession.set(row.session_id, list);
-  }
+  const attemptsBySession = await loadAttemptsBySession(
+    client,
+    userId,
+    sessionIds,
+  );
 
   return sessions.map((s) => {
     const config = asConfig(s.config);
     const mode = s.mode as SessionMode;
     const agg = summarizeAttempts(attemptsBySession.get(s.id) ?? [], config);
+    const scorePct =
+      s.score_pct == null ? null : Math.round(Number(s.score_pct));
+
+    // Safety net: finished graded session with a score but no attempt rows
+    // loaded (query truncate / schema lag). Prefer showing the planned total
+    // over a misleading 0/N — score was computed from real answers.
+    let answered = agg.answered;
+    if (
+      answered === 0 &&
+      s.status === "finished" &&
+      scorePct != null &&
+      agg.total > 0
+    ) {
+      answered = agg.total;
+    }
+
     return {
       id: s.id as string,
       mode,
@@ -389,9 +467,8 @@ export async function loadSessionHistory(
       status: s.status as SessionHistoryRow["status"],
       startedAt: s.started_at as string,
       finishedAt: (s.finished_at as string | null) ?? null,
-      scorePct:
-        s.score_pct == null ? null : Math.round(Number(s.score_pct)),
-      answered: agg.answered,
+      scorePct,
+      answered,
       total: agg.total,
       correct: agg.correct,
       durationMs: (s.duration_ms as number | null) ?? null,
@@ -418,16 +495,51 @@ export async function loadSessionDetail(
   const config = asConfig(session.config);
   const mode = session.mode as SessionMode;
 
-  const { data: rawAttempts } = await client
+  let rawAttempts: Array<{
+    id: string;
+    question_id: string;
+    user_answer: string | null;
+    is_correct: boolean;
+    is_sibling?: boolean;
+    hinted?: boolean;
+    time_spent_ms?: number;
+    created_at: string;
+    question?: unknown;
+  }> = [];
+
+  const full = await client
     .from("attempts")
     .select(
       "id, question_id, user_answer, is_correct, is_sibling, hinted, time_spent_ms, created_at, question:questions(section_code, prompt, option_a, option_b, option_c, option_d, correct_option, source, is_ai_generated)",
     )
     .eq("session_id", sessionId)
     .eq("user_id", userId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })
+    .limit(20_000);
 
-  const attempts: SessionAttemptRow[] = (rawAttempts ?? []).map((row) => {
+  if (full.error) {
+    console.error(
+      "[session-history] session detail attempts failed; retrying without is_sibling:",
+      full.error.message,
+    );
+    const fallback = await client
+      .from("attempts")
+      .select(
+        "id, question_id, user_answer, is_correct, hinted, time_spent_ms, created_at, question:questions(section_code, prompt, option_a, option_b, option_c, option_d, correct_option, source, is_ai_generated)",
+      )
+      .eq("session_id", sessionId)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true })
+      .limit(20_000);
+    rawAttempts = (fallback.data ?? []).map((r) => ({
+      ...(r as (typeof rawAttempts)[number]),
+      is_sibling: false,
+    }));
+  } else {
+    rawAttempts = (full.data ?? []) as typeof rawAttempts;
+  }
+
+  const attempts: SessionAttemptRow[] = rawAttempts.map((row) => {
     const q = row.question as {
       section_code?: string;
       prompt?: string;
@@ -468,10 +580,7 @@ export async function loadSessionDetail(
     };
   });
 
-  const agg = summarizeAttempts(
-    (rawAttempts ?? []) as RawAttempt[],
-    config,
-  );
+  const agg = summarizeAttempts(rawAttempts as RawAttempt[], config);
 
   return {
     id: session.id as string,
@@ -483,7 +592,13 @@ export async function loadSessionDetail(
     finishedAt: (session.finished_at as string | null) ?? null,
     scorePct:
       session.score_pct == null ? null : Math.round(Number(session.score_pct)),
-    answered: agg.answered,
+    answered:
+      agg.answered === 0 &&
+      session.status === "finished" &&
+      session.score_pct != null &&
+      agg.total > 0
+        ? agg.total
+        : agg.answered,
     total: agg.total,
     correct: agg.correct,
     durationMs: (session.duration_ms as number | null) ?? null,

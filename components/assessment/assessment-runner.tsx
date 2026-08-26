@@ -464,7 +464,7 @@ export function AssessmentRunner({
                   {q.explanation && (
                     <div className="mt-3 pt-3 border-t border-border">
                       <div className="text-xs uppercase tracking-widest text-ink-muted mb-1">
-                        Why <span className="font-mono">{correctLetter}</span> is right
+                        Why <span className="font-mono">{correctLetter}</span> is correct
                       </div>
                       <p className="text-sm text-ink leading-relaxed">
                         {q.explanation}

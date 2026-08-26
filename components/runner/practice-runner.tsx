@@ -895,7 +895,7 @@ function QuestionPanel({
       {explanationRevealed && q.explanation && (
         <div className="mt-5 rounded-2xl border border-border bg-elevated p-4">
           <div className="text-xs uppercase tracking-widest text-ink-muted mb-1">
-            Why <span className="font-mono">{correctLetter}</span> is right
+            Why <span className="font-mono">{correctLetter}</span> is correct
           </div>
           <p className="text-sm text-ink leading-relaxed">{q.explanation}</p>
         </div>

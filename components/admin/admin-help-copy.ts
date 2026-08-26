@@ -16,7 +16,7 @@ export const ADMIN_HELP = {
   lifetime_accuracy: {
     title: "Lifetime question accuracy",
     description:
-      "Correct ÷ all answered questions in the attempts table — any mode, smoke, partial, or finished. Not a finished exam score.",
+      "Correct answers divided by all questions the student has ever answered — any mode, including smoke tests and partial runs. This is not a finished exam score.",
   },
   avg_lifetime_accuracy: {
     title: "Average lifetime question accuracy",
@@ -26,7 +26,7 @@ export const ADMIN_HELP = {
   best_mock_finished: {
     title: "Best mock (finished)",
     description:
-      "Highest score_pct from sessions where mode = mock and status = finished. Partial or in-progress mocks are ignored.",
+      "The student's highest score on a completed mock exam. Partial or in-progress mocks are not counted.",
   },
   last_mock_finished: {
     title: "Last mock (finished)",
@@ -36,17 +36,17 @@ export const ADMIN_HELP = {
   coverage_sections: {
     title: "Section coverage",
     description:
-      "How many of the 12 syllabus sections have at least one answered question (v_user_section_mastery).",
+      "How many of the 12 syllabus sections the student has touched — each section counts once they have answered at least one question there.",
   },
   open_mistakes: {
     title: "Open mistakes",
     description:
-      "Unresolved rows in v_user_mistakes (resolved = false) — questions the student missed and has not cleared.",
+      "Questions the student missed and has not yet cleared. A mistake closes after two correct answers in a row on that question.",
   },
   mode_finished_badge: {
     title: "Mode finished count",
     description:
-      "Number of sessions with status = finished for this mode. A green badge means at least one completed run.",
+      "Number of completed sessions in this mode. A green badge means the student finished at least one run.",
   },
   mode_partial_badge: {
     title: "Partial / in-progress runs",
@@ -56,7 +56,7 @@ export const ADMIN_HELP = {
   completion_funnel: {
     title: "Completion funnel",
     description:
-      "Students who finished each stage at least once (session status = finished). Not the same as lifetime question accuracy.",
+      "How many students completed each stage at least once. This tracks finished sessions, not overall question accuracy.",
   },
   mock_distribution: {
     title: "Best mock score distribution",
@@ -81,7 +81,7 @@ export const ADMIN_HELP = {
   finished_test_scores: {
     title: "Finished test scores",
     description:
-      "Latest and best score_pct from sessions with status = finished only. Partial runs do not appear here.",
+      "Latest and best scores from completed exams only. Partial or abandoned runs do not appear here.",
   },
   session_breakdown: {
     title: "Session breakdown by mode & type",
@@ -91,12 +91,12 @@ export const ADMIN_HELP = {
   readiness_estimate: {
     title: "Readiness estimate",
     description:
-      "Composite score from getUserStats — blends accuracy, coverage, streak, and mode progress. May reflect question attempts before any finished exam.",
+      "A composite readiness score blending accuracy, section coverage, streak, and progress across modes. Can reflect practice before any finished exam.",
   },
   questions_attempted: {
     title: "Questions attempted",
     description:
-      "Total primary question attempts across all sessions and modes (attempts table). Includes smoke and partial runs.",
+      "Total questions the student has answered across all sessions and modes, including smoke tests and partial runs.",
   },
   seven_day_accuracy: {
     title: "7-day question accuracy",
@@ -106,12 +106,12 @@ export const ADMIN_HELP = {
   study_time_30d: {
     title: "Study time (30 days)",
     description:
-      "Sum of duration_ms on finished sessions in the last 30 days.",
+      "Total time spent on completed sessions in the last 30 days.",
   },
   active_days_30d: {
     title: "Active days (30 days)",
     description:
-      "Days in the last 30 with at least one question attempt (daily activity rollup).",
+      "Number of days in the last 30 with at least one question answered.",
   },
 } as const;
 

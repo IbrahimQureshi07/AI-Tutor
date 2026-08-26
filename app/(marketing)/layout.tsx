@@ -1,19 +1,13 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { BrandLogo } from "@/components/brand/brand-logo";
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background bg-paper">
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/70 backdrop-blur-xl">
         <div className="container flex h-16 items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="relative h-8 w-8 rounded-full bg-primary/15 grid place-items-center">
-              <div className="h-3 w-3 rounded-full bg-primary" />
-            </div>
-            <span className="font-serif text-lg font-semibold tracking-tight">
-              Tutor<span className="text-primary">.sc</span>
-            </span>
-          </Link>
+          <BrandLogo href="/" size="md" priority />
           <nav className="hidden md:flex items-center gap-8 text-sm text-ink-muted">
             <a href="#modes" className="hover:text-ink transition-colors">Modes</a>
             <a href="#how" className="hover:text-ink transition-colors">How it works</a>

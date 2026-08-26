@@ -14,6 +14,8 @@ import {
   Settings,
   ShieldCheck,
 } from "lucide-react";
+import { BrandLogo } from "@/components/brand/brand-logo";
+import { BRAND } from "@/lib/brand";
 
 const NAV = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -37,14 +39,7 @@ export function Sidebar({ showAdmin = false }: { showAdmin?: boolean }) {
   return (
     <aside className="hidden lg:flex flex-col w-64 shrink-0 border-r border-border bg-surface/40 backdrop-blur h-screen sticky top-0">
       <div className="p-5 border-b border-border/60">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="relative h-8 w-8 rounded-full bg-primary/15 grid place-items-center">
-            <div className="h-3 w-3 rounded-full bg-primary" />
-          </div>
-          <span className="font-serif text-lg font-semibold tracking-tight">
-            Tutor<span className="text-primary">.sc</span>
-          </span>
-        </Link>
+        <BrandLogo href="/dashboard" size="md" />
       </div>
       <nav className="flex-1 p-3 space-y-0.5">
         {nav.map((n) => {
@@ -73,7 +68,7 @@ export function Sidebar({ showAdmin = false }: { showAdmin?: boolean }) {
         })}
       </nav>
       <div className="p-4 border-t border-border/60 text-xs text-ink-muted">
-        Tutor.sc · SC Real Estate
+        {BRAND.shortName} · SC Real Estate
       </div>
     </aside>
   );

@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
 import { TrendingUp, Users, CircleCheck } from "lucide-react";
+import { BrandLogo } from "@/components/brand/brand-logo";
 
 const STATS = [
   { icon: TrendingUp, n: "+18 pts", l: "Average score lift" },
@@ -23,14 +23,7 @@ export function AuthSplitLayout({ children }: { children: React.ReactNode }) {
     <div className="grid min-h-screen lg:grid-cols-[1.2fr_1fr]">
       {/* Left: hero */}
       <div className="relative hidden lg:flex flex-col p-12 mesh-gradient overflow-hidden">
-        <Link href="/" className="flex items-center gap-2 z-10">
-          <div className="relative h-9 w-9 rounded-full bg-primary/15 grid place-items-center">
-            <div className="h-3.5 w-3.5 rounded-full bg-primary" />
-          </div>
-          <span className="font-serif text-xl font-semibold tracking-tight">
-            Tutor<span className="text-primary">.sc</span>
-          </span>
-        </Link>
+        <BrandLogo href="/" size="lg" className="z-10" priority />
 
         <div className="relative mt-auto z-10 max-w-xl">
           <h1 className="font-serif text-5xl xl:text-6xl font-semibold tracking-tight text-ink leading-[1.05]">

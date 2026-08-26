@@ -10,8 +10,16 @@ export type GateStatus = {
   unlocked: boolean;
   reasons: string[]; // reasons it's locked, empty if unlocked
   details: {
+    /** Most recent *full* mock score (display). */
     bestRecentMockPct: number | null;
+    /** Average of the two most recent *full* mocks (display). */
     avgLast2MockPct: number | null;
+    /**
+     * True once the student has ever cleared the Mock readiness bar
+     * (any full mock ≥75%, or any consecutive full-mock pair averaging ≥70%).
+     * Stays true even if later mocks score lower — Final does not re-lock.
+     */
+    mockGateCleared: boolean;
     /**
      * True if the user has finished at least one Mock **smoke** session.
      * Only actually waives the strict Mock score gate for admins (QA) — see
@@ -69,24 +77,53 @@ async function getFinishedFinalSessions(
   return (data ?? []) as SessionRow[];
 }
 
-async function getRecentMockSessions(
+async function getFinishedFullMockScores(
   supabase: SupabaseClient,
   userId: string,
-  limit = 5,
-): Promise<{ score_pct: number | null }[]> {
+  limit = 50,
+): Promise<number[]> {
   const { data } = await supabase
     .from("sessions")
-    .select("score_pct, finished_at")
+    .select("score_pct, finished_at, config")
     .eq("user_id", userId)
     .eq("mode", "mock")
     .eq("status", "finished")
     .not("finished_at", "is", null)
     .order("finished_at", { ascending: false })
     .limit(limit);
-  return (data ?? []) as { score_pct: number | null }[];
+
+  const scores: number[] = [];
+  for (const row of data ?? []) {
+    const cfg = row.config as { length?: string; target_total?: number } | null;
+    // Smoke is practice/QA only — it must never count toward Final unlock.
+    if (cfg?.length === "smoke" || cfg?.target_total === MOCK_SMOKE_TOTAL) {
+      continue;
+    }
+    const pct = row.score_pct == null ? null : Number(row.score_pct);
+    if (typeof pct === "number" && !Number.isNaN(pct)) scores.push(pct);
+  }
+  return scores;
 }
 
-/** Finished smoke mock = QA path to open Final without 75%/70% mock or recent Mistakes. */
+/**
+ * True if the student has EVER cleared the Mock readiness bar.
+ * Once true, Final stays unlocked even if later mocks score lower.
+ *
+ *   - any single full mock ≥ 75%, OR
+ *   - any two consecutive full mocks (by finish time) average ≥ 70%
+ */
+function everClearedMockGate(mockPctsNewestFirst: number[]): boolean {
+  if (mockPctsNewestFirst.some((p) => p >= 75)) return true;
+  for (let i = 0; i < mockPctsNewestFirst.length - 1; i++) {
+    const avg = Math.round(
+      (mockPctsNewestFirst[i] + mockPctsNewestFirst[i + 1]) / 2,
+    );
+    if (avg >= 70) return true;
+  }
+  return false;
+}
+
+/** Finished smoke mock = QA path to open Final without 75%/70% mock. */
 async function hasFinishedSmokeMock(
   supabase: SupabaseClient,
   userId: string,
@@ -203,8 +240,9 @@ function computePartialRetake(
  *
  * Condition to unlock (unless partial-retake is active):
  *
- *   Most recent Mock score ≥ 75%   OR
- *   Average of last 2 Mocks ≥ 70%
+ *   Ever cleared Mock readiness (sticky — does not re-lock later):
+ *     any full Mock score ≥ 75%   OR
+ *     any two consecutive full Mocks averaging ≥ 70%
  *   OR (admin/QA only) at least one **finished Mock smoke** session — any
  *   score. Smoke runs are a quick practice/QA shortcut; students must clear
  *   a real Mock score to unlock the Final — a smoke run never does.
@@ -224,15 +262,11 @@ export async function getFinalGateStatus(
   isAdmin: boolean = false,
 ): Promise<GateStatus> {
   const now = new Date();
-  const [mocks, finals, smokeMockCompleted] = await Promise.all([
-    getRecentMockSessions(supabase, userId, 5),
+  const [mockPcts, finals, smokeMockCompleted] = await Promise.all([
+    getFinishedFullMockScores(supabase, userId, 50),
     getFinishedFinalSessions(supabase, userId),
     hasFinishedSmokeMock(supabase, userId),
   ]);
-
-  const mockPcts = mocks
-    .map((m) => (m.score_pct == null ? null : Number(m.score_pct)))
-    .filter((v): v is number => typeof v === "number" && !Number.isNaN(v));
 
   const bestRecentMockPct = mockPcts.length > 0 ? mockPcts[0] : null;
   const avgLast2MockPct =
@@ -244,9 +278,7 @@ export async function getFinalGateStatus(
 
   const partial = computePartialRetake(finals, now);
 
-  const mockOkStrict =
-    (bestRecentMockPct != null && bestRecentMockPct >= 75) ||
-    (avgLast2MockPct != null && avgLast2MockPct >= 70);
+  const mockGateCleared = everClearedMockGate(mockPcts);
   const smokeUnlocksFinal = isAdmin;
   const mockOkQa = smokeMockCompleted && smokeUnlocksFinal;
 
@@ -255,15 +287,15 @@ export async function getFinalGateStatus(
   // Gate: Mock readiness — only enforced if we're NOT in a partial-retake
   // window (in which case the user already cleared the bar).
   if (!partial?.active) {
-    if (!mockOkStrict && !mockOkQa) {
+    if (!mockGateCleared && !mockOkQa) {
       reasons.push(
         isAdmin
           ? bestRecentMockPct == null
             ? "Take at least one Mock Exam first (full mock ≥70–75% or finish a smoke mock to open Final for testing)."
-            : `Need a Mock score ≥75% (most recent: ${Math.round(bestRecentMockPct)}%), average ≥70% over last 2, or finish a Mock smoke test for QA access.`
+            : `Need a full Mock ≥75% (or two consecutive mocks averaging ≥70%). Latest: ${Math.round(bestRecentMockPct)}%. Once cleared, Final stays unlocked.`
           : bestRecentMockPct == null
             ? "Take at least one full Mock Exam first (≥70–75%) to unlock the Final Test."
-            : `Need a Mock score ≥75% (most recent: ${Math.round(bestRecentMockPct)}%) or average ≥70% over your last 2 mocks to unlock the Final Test.`,
+            : `Need a full Mock ≥75% (or two consecutive mocks averaging ≥70%) to unlock the Final Test. Latest: ${Math.round(bestRecentMockPct)}%. Once unlocked, it stays open.`,
       );
     }
   }
@@ -274,6 +306,7 @@ export async function getFinalGateStatus(
     details: {
       bestRecentMockPct,
       avgLast2MockPct,
+      mockGateCleared,
       smokeMockCompleted,
       smokeUnlocksFinal,
     },

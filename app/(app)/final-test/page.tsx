@@ -87,9 +87,7 @@ function GateDetail({
   gate: Awaited<ReturnType<typeof getFinalGateStatus>>;
 }) {
   const d = gate.details;
-  const strictMock =
-    (d.bestRecentMockPct != null && d.bestRecentMockPct >= 75) ||
-    (d.avgLast2MockPct != null && d.avgLast2MockPct >= 70);
+  const strictMock = d.mockGateCleared;
   const smokeQaPath = d.smokeMockCompleted && d.smokeUnlocksFinal && !strictMock;
   // Smoke finished but didn't unlock (not an admin) — explain why, so it
   // doesn't look like a bug.
@@ -122,7 +120,9 @@ function GateDetail({
                 ? `${d.bestRecentMockPct == null ? "—" : `${Math.round(d.bestRecentMockPct)}%`} (waived — smoke QA)`
                 : d.bestRecentMockPct == null
                   ? "No mock yet"
-                  : `${Math.round(d.bestRecentMockPct)}% (need ≥75%)`
+                  : strictMock
+                    ? `${Math.round(d.bestRecentMockPct)}% (unlocked — stays open)`
+                    : `${Math.round(d.bestRecentMockPct)}% (need ≥75% once)`
             }
             ok={strictMock || smokeQaPath}
           />
@@ -133,7 +133,9 @@ function GateDetail({
                 ? "Not required (smoke QA)"
                 : d.avgLast2MockPct == null
                   ? "Not enough mocks"
-                  : `${d.avgLast2MockPct}% (need ≥70%)`
+                  : strictMock
+                    ? `${d.avgLast2MockPct}% (unlocked — stays open)`
+                    : `${d.avgLast2MockPct}% (need ≥70% once)`
             }
             ok={strictMock || smokeQaPath}
           />

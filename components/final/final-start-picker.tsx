@@ -51,11 +51,7 @@ export function FinalStartPicker({ gate, pool }: Props) {
   const [busy, setBusy] = React.useState(false);
   const inFlight = React.useRef(false);
 
-  const strictMock =
-    (gate.details.bestRecentMockPct != null &&
-      gate.details.bestRecentMockPct >= 75) ||
-    (gate.details.avgLast2MockPct != null &&
-      gate.details.avgLast2MockPct >= 70);
+  const strictMock = gate.details.mockGateCleared;
   const smokeQaUnlock =
     gate.details.smokeMockCompleted &&
     gate.details.smokeUnlocksFinal &&

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Source_Serif_4 } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "sonner";
+import { BRAND } from "@/lib/brand";
 import "./globals.css";
 
 const inter = Inter({
@@ -17,10 +18,30 @@ const sourceSerif = Source_Serif_4({
 });
 
 export const metadata: Metadata = {
-  title: "AI Tutor — South Carolina Real Estate Exam",
-  description:
-    "A Claude-styled AI tutor that practices with you, finds your weak spots, and gets you exam-ready.",
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  title: {
+    default: BRAND.siteTitle,
+    template: `%s · ${BRAND.shortName}`,
+  },
+  description: BRAND.siteDescription,
+  applicationName: BRAND.shortName,
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  ),
+  openGraph: {
+    title: BRAND.siteTitle,
+    description: BRAND.siteDescription,
+    siteName: BRAND.legalName,
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: BRAND.siteTitle,
+    description: BRAND.siteDescription,
+  },
+  icons: {
+    icon: [{ url: "/brand/fa-mark.png", type: "image/png" }],
+    apple: [{ url: "/brand/fa-mark.png", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -20,6 +20,10 @@ import { VoiceInputButton } from "./voice-input-button";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatSectionDisplayLabel } from "@/lib/sections/display-label";
 
+/** Auto-sent when Ask AI opens with a question — guides without asking for a letter. */
+const COACH_PROMPT =
+  "Walk me through this question with a simple example. Help me reason toward the right idea — don't tell me the letter.";
+
 export function ChatSheet({
   open,
   onOpenChange,
@@ -39,26 +43,47 @@ export function ChatSheet({
     isLoading,
     setMessages,
     setInput,
+    append,
   } = useChat({
     api: "/api/chat",
     body: { questionContext },
   });
 
   const viewportRef = React.useRef<HTMLDivElement>(null);
+  const lastSeededIdRef = React.useRef<string | null>(null);
+  const autoSentIdRef = React.useRef<string | null>(null);
+
   React.useEffect(() => {
     viewportRef.current?.scrollTo({ top: 999999, behavior: "smooth" });
   }, [messages, isLoading]);
 
-  // When new question context arrives, seed a starter prompt in input
+  // New question context → reset thread and show the coaching prompt in the input.
   React.useEffect(() => {
-    if (questionContext && messages.length === 0) {
-      setInput(
-        "Explain why my answer was wrong (or confirm it). Teach me the underlying concept with a memorable example.",
-      );
-    }
-  }, [questionContext, messages.length, setInput]);
+    if (!open || !questionContext) return;
+    if (lastSeededIdRef.current === questionContext.id) return;
+    lastSeededIdRef.current = questionContext.id;
+    autoSentIdRef.current = null;
+    setMessages([]);
+    setInput(COACH_PROMPT);
+  }, [open, questionContext, setMessages, setInput]);
+
+  // Auto-send the coaching prompt — student does not need to press Send.
+  // Wait until the reset above has cleared the thread (messages.length === 0)
+  // so a question switch never skips seeding because old messages linger.
+  React.useEffect(() => {
+    if (!open || !questionContext) return;
+    if (lastSeededIdRef.current !== questionContext.id) return;
+    if (autoSentIdRef.current === questionContext.id) return;
+    if (messages.length > 0) return;
+    autoSentIdRef.current = questionContext.id;
+    void append({ role: "user", content: COACH_PROMPT }).then(() => {
+      setInput("");
+    });
+  }, [open, questionContext, messages.length, append, setInput]);
 
   function handleNewChat() {
+    lastSeededIdRef.current = null;
+    autoSentIdRef.current = null;
     setMessages([]);
     onClearContext();
     setInput("");
@@ -108,12 +133,12 @@ export function ChatSheet({
                 </button>
               </div>
               <p className="text-ink line-clamp-3">{questionContext.prompt}</p>
-              <div className="mt-2 text-ink-muted">
-                Your answer:{" "}
-                <b className="text-ink">{questionContext.user_answer ?? "—"}</b>
-                {"  ·  "}
-                Correct: <b className="text-ink">{questionContext.correct_option}</b>
-              </div>
+              {questionContext.user_answer ? (
+                <div className="mt-2 text-ink-muted">
+                  Your answer:{" "}
+                  <b className="text-ink">{questionContext.user_answer}</b>
+                </div>
+              ) : null}
             </div>
           </div>
         )}

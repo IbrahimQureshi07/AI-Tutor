@@ -6,6 +6,35 @@ import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
 import { cn } from "@/lib/utils";
 
+/**
+ * Models sometimes emit LaTeX (e.g. $285{,}000, \[...\], \div) even though
+ * we only render plain Markdown. Scrub the common artifacts so students see
+ * normal money/math text. Intentionally narrow — does not touch Markdown links.
+ */
+export function scrubLatexArtifacts(text: string): string {
+  let out = text;
+  // $285{,}000 → $285,000
+  out = out.replace(/\{\s*,\s*\}/g, ",");
+  // Common math commands → plain symbols
+  out = out.replace(/\\div\b/g, "÷");
+  out = out.replace(/\\approx\b/g, "≈");
+  out = out.replace(/\\times\b/g, "×");
+  out = out.replace(/\\cdot\b/g, "·");
+  out = out.replace(/\\pm\b/g, "±");
+  out = out.replace(/\\%/g, "%");
+  out = out.replace(/\\\$/g, "$");
+  // Display-math delimiters
+  out = out.replace(/\\\[/g, "");
+  out = out.replace(/\\\]/g, "");
+  out = out.replace(/\$\$/g, "");
+  // Bracketed display lines like: [ $339,000 - $285,000 = $54,000 ]
+  // Only when content includes $ (money/math) — leave Markdown links alone.
+  out = out.replace(/\[\s*([^\]\n]*\$[^\]\n]*)\s*\]/g, (_, inner: string) =>
+    inner.trim(),
+  );
+  return out;
+}
+
 const components: Components = {
   p: ({ children }) => (
     <p className="mb-2 last:mb-0 first:mt-0 [&:only-child]:mb-0">{children}</p>
@@ -97,6 +126,7 @@ export function ChatMarkdown({
   className?: string;
 }) {
   if (!content?.trim()) return null;
+  const cleaned = scrubLatexArtifacts(content);
   return (
     <div
       className={cn(
@@ -105,7 +135,7 @@ export function ChatMarkdown({
       )}
     >
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {content}
+        {cleaned}
       </ReactMarkdown>
     </div>
   );

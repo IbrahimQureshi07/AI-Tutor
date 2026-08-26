@@ -31,6 +31,7 @@ YOUR JOB:
 STYLE:
 - Clear structure is fine (short bullets, bold key terms).
 - Warm and precise. Prefer depth that helps them decide over one-liners.
+- Plain text for all numbers and math — NO LaTeX. Write $339,000 - $285,000 = $54,000. Never use {,}, \\div, \\approx, \\[, \\], $$, or wrap formulas in [ ... ].
 - Use the JSON below ONLY as private ground truth so your teaching is accurate — never echo the "correct" field.
 `;
 

@@ -30,7 +30,19 @@ export function isBootstrapAdminEmail(email: string | null | undefined): boolean
 
 /**
  * Prefer role-based admin if columns exist, otherwise fall back to bootstrap email.
+ * Pass a profile row when you already loaded it — avoids a second DB round-trip.
  */
+export function resolveIsAdmin(
+  user: User,
+  profile: Pick<ProfileRow, "role" | "is_active"> | null | undefined,
+): boolean {
+  if (profile) {
+    if (profile.is_active === false) return false;
+    if (profile.role === "admin") return true;
+  }
+  return isBootstrapAdminEmail(user.email);
+}
+
 export async function isUserAdmin(
   supabase: SupabaseClient,
   user: User,
@@ -42,14 +54,12 @@ export async function isUserAdmin(
     .maybeSingle<Pick<ProfileRow, "role" | "is_active">>();
 
   if (!error && profile) {
-    if (profile.is_active === false) return false;
-    return profile.role === "admin";
+    return resolveIsAdmin(user, profile);
   }
 
   if (error && !isMissingRoleColumnsError(error)) {
     console.error("admin status lookup failed", error);
   }
-  // Temporary fallback while role columns are unavailable.
   return isBootstrapAdminEmail(user.email);
 }
 

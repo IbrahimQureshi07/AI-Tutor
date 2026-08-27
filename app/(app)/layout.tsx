@@ -1,27 +1,16 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/app/sidebar";
 import { Topbar } from "@/components/app/topbar";
 import { MobileNav } from "@/components/app/mobile-nav";
 import { ChatSheetProvider } from "@/components/chat/chat-sheet-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { isUserAdmin, maybeBootstrapAdmin } from "@/lib/auth/bootstrap-admin";
+import { getAppShell } from "@/lib/auth/request-session";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const shell = await getAppShell();
+  if (!shell) redirect("/login");
 
-  if (!user) redirect("/login");
-  await maybeBootstrapAdmin(supabase, user);
-  const showAdmin = await isUserAdmin(supabase, user);
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name")
-    .eq("id", user.id)
-    .maybeSingle();
+  const { user, profile, showAdmin } = shell;
 
   return (
     <TooltipProvider delayDuration={300}>

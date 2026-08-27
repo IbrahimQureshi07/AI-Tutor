@@ -17,7 +17,7 @@ type PaywallStatus = {
 };
 
 let cache: { at: number; status: PaywallStatus } | null = null;
-const CACHE_MS = 5_000;
+const CACHE_MS = 60_000;
 
 export function isMissingAppSettingsError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;

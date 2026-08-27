@@ -1,6 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { getAccessState } from "@/lib/access/check-access";
+import {
+  clearAccessGate,
+  readAccessGate,
+  readBootstrapDone,
+  writeAccessGate,
+  writeBootstrapDone,
+  type AccessGateValue,
+} from "@/lib/access/access-gate-cookie";
+import {
+  isBootstrapAdminEmail,
+  maybeBootstrapAdmin,
+} from "@/lib/auth/bootstrap-admin";
 
 const PUBLIC_PATHS = [
   "/",
@@ -25,6 +37,21 @@ function isPaywallExempt(pathname: string): boolean {
   return PAYWALL_EXEMPT_PREFIXES.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
+}
+
+function redirectTo(
+  request: NextRequest,
+  pathname: string,
+  gate?: AccessGateValue,
+  bootstrapDone?: boolean,
+) {
+  const url = request.nextUrl.clone();
+  url.pathname = pathname;
+  url.search = "";
+  const res = NextResponse.redirect(url);
+  if (gate) writeAccessGate(res, gate);
+  if (bootstrapDone) writeBootstrapDone(res);
+  return res;
 }
 
 export async function middleware(request: NextRequest) {
@@ -65,7 +92,20 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirectTo", pathname);
-    return NextResponse.redirect(url);
+    const res = NextResponse.redirect(url);
+    clearAccessGate(res);
+    return res;
+  }
+
+  let didBootstrap = false;
+  if (
+    user &&
+    isBootstrapAdminEmail(user.email) &&
+    !readBootstrapDone(request)
+  ) {
+    await maybeBootstrapAdmin(supabase, user);
+    writeBootstrapDone(response);
+    didBootstrap = true;
   }
 
   if (pathname === "/unlock") {
@@ -75,22 +115,25 @@ export async function middleware(request: NextRequest) {
       url.searchParams.set("redirectTo", "/unlock");
       return NextResponse.redirect(url);
     }
+    if (readAccessGate(request) === "ok") {
+      return redirectTo(request, "/dashboard", "ok", didBootstrap);
+    }
     const access = await getAccessState(supabase, user);
     if (access.hasFullAccess) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/dashboard";
-      url.search = "";
-      return NextResponse.redirect(url);
+      return redirectTo(request, "/dashboard", "ok", didBootstrap);
     }
+    writeAccessGate(response, "lock");
     return response;
   }
 
   if (user && (pathname === "/login" || pathname === "/signup")) {
     const access = await getAccessState(supabase, user);
-    const url = request.nextUrl.clone();
-    url.pathname = access.hasFullAccess ? "/dashboard" : "/unlock";
-    url.search = "";
-    return NextResponse.redirect(url);
+    return redirectTo(
+      request,
+      access.hasFullAccess ? "/dashboard" : "/unlock",
+      access.hasFullAccess ? "ok" : "lock",
+      didBootstrap || isBootstrapAdminEmail(user.email),
+    );
   }
 
   if (
@@ -99,13 +142,23 @@ export async function middleware(request: NextRequest) {
     !isPaywallExempt(pathname) &&
     !pathname.startsWith("/_next")
   ) {
+    const cached = readAccessGate(request);
+    if (cached === "ok") {
+      return response;
+    }
+    if (cached === "lock") {
+      return redirectTo(request, "/unlock", "lock", didBootstrap);
+    }
+
     const access = await getAccessState(supabase, user);
     if (access.migrationApplied && access.needsPaywall) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/unlock";
-      url.search = "";
-      return NextResponse.redirect(url);
+      return redirectTo(request, "/unlock", "lock", didBootstrap);
     }
+    writeAccessGate(response, "ok");
+  }
+
+  if (!user) {
+    clearAccessGate(response);
   }
 
   return response;

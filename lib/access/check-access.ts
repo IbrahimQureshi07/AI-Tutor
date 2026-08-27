@@ -1,5 +1,8 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
-import { isUserAdmin } from "@/lib/auth/bootstrap-admin";
+import {
+  isBootstrapAdminEmail,
+  resolveIsAdmin,
+} from "@/lib/auth/bootstrap-admin";
 import { isPaywallEnabled } from "@/lib/access/paywall-settings";
 import type {
   AccessProfile,
@@ -143,22 +146,26 @@ export async function loadAccessProfile(
   return { ok: false, error };
 }
 
+/**
+ * Single profiles round-trip (role + access columns). Admin is derived from
+ * that row — no separate isUserAdmin query.
+ */
 export async function getAccessState(
   supabase: SupabaseClient,
   user: User,
 ): Promise<AccessState> {
-  const isAdmin = await isUserAdmin(supabase, user);
   const loaded = await loadAccessProfile(supabase, user.id);
 
   if (!loaded.ok) {
     console.error("access profile lookup failed", loaded.error);
-    return buildLegacyFullAccessState(isAdmin);
+    return buildLegacyFullAccessState(isBootstrapAdminEmail(user.email));
   }
 
   if (!loaded.migrationApplied) {
-    return buildLegacyFullAccessState(isAdmin);
+    return buildLegacyFullAccessState(isBootstrapAdminEmail(user.email));
   }
 
+  const isAdmin = resolveIsAdmin(user, loaded.profile);
   const state = resolveAccessState(loaded.profile, isAdmin, true);
 
   // Global paywall off → active accounts skip /unlock (DB access_status unchanged).

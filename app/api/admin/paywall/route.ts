@@ -73,5 +73,9 @@ export async function PATCH(req: Request) {
     );
   }
 
+  // Force fresh access checks after global paywall flip.
+  const { bustAccessGateCookie } = await import("@/lib/access/access-gate-cookie");
+  await bustAccessGateCookie();
+
   return NextResponse.json(result.status);
 }

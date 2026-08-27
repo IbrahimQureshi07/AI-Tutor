@@ -13,10 +13,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PricingCheckoutButton } from "@/components/billing/pricing-checkout-button";
 import { PaywallSignOutButton } from "@/components/billing/paywall-sign-out-button";
+import { PurchaseSupportStrip } from "@/components/brand/purchase-support-strip";
+import { BRAND } from "@/lib/brand";
 
 function statusMessage(status: string, migrationApplied: boolean): string {
   if (!migrationApplied) {
-    return "Complete your one-time purchase to unlock Assessment, Practice, Mock exams, AI tutor chat, and progress reports.";
+    return `Complete your one-time purchase to unlock Assessment, Practice, Mock exams, ${BRAND.productName} chat, and progress reports.`;
   }
   if (status === "demo_completed") {
     return "You've used the free preview. Unlock the full course to continue studying with every mode and the complete question bank.";
@@ -54,14 +56,14 @@ export default async function UnlockPage() {
           Course access required
         </Badge>
         <h1 className="font-serif text-3xl md:text-4xl font-semibold tracking-tight text-ink">
-          Unlock the full prep course
+          Unlock the full {BRAND.shortName} prep course
         </h1>
         <p className="mt-4 text-ink-muted leading-relaxed max-w-xl mx-auto">
           {headline}
         </p>
       </div>
 
-      <Card className="border-primary/20 shadow-glow overflow-hidden mb-10">
+      <Card className="border-primary/20 shadow-glow overflow-hidden mb-8">
         <div className="bg-primary/5 border-b border-primary/10 px-6 py-8 text-center">
           <div className="font-serif text-5xl font-semibold text-ink tabular-nums">
             {price}
@@ -84,6 +86,8 @@ export default async function UnlockPage() {
           </div>
         </CardContent>
       </Card>
+
+      <PurchaseSupportStrip className="mb-10" />
 
       <section>
         <div className="flex items-center gap-2 mb-4">
@@ -109,6 +113,10 @@ export default async function UnlockPage() {
           ))}
         </ul>
       </section>
+
+      <p className="mt-10 text-center text-xs text-ink-muted">
+        © {new Date().getFullYear()} {BRAND.legalName}
+      </p>
     </main>
   );
 }

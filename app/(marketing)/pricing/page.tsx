@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PricingCheckoutButton } from "@/components/billing/pricing-checkout-button";
+import { PurchaseSupportStrip } from "@/components/brand/purchase-support-strip";
+import { BRAND } from "@/lib/brand";
 
 export default async function PricingPage() {
   const supabase = await createClient();
@@ -28,18 +30,19 @@ export default async function PricingPage() {
       <div className="text-center max-w-2xl mx-auto mb-12">
         <Badge variant="outline" className="mb-4 border-primary/30">
           <Sparkles className="h-3 w-3 text-primary mr-1" />
-          One-time course access
+          {BRAND.shortName} · One-time course access
         </Badge>
         <h1 className="font-serif text-4xl md:text-5xl font-semibold tracking-tight text-ink">
           Unlock the full SC Real Estate prep course
         </h1>
         <p className="mt-4 text-ink-muted text-lg leading-relaxed">
-          After your free preview, purchase once to access every study mode, the
-          full question bank, AI tutor chat, mock exams, and progress reports.
+          After your free preview, purchase once from {BRAND.shortName} to access
+          every study mode, the full question bank, {BRAND.productName} chat, mock
+          exams, and progress reports.
         </p>
       </div>
 
-      <Card className="border-primary/20 shadow-glow mb-12 overflow-hidden">
+      <Card className="border-primary/20 shadow-glow mb-10 overflow-hidden">
         <div className="bg-primary/5 border-b border-primary/10 px-6 py-8 text-center">
           <div className="font-serif text-5xl md:text-6xl font-semibold text-ink tabular-nums">
             {price}
@@ -103,6 +106,8 @@ export default async function PricingPage() {
           )}
         </CardContent>
       </Card>
+
+      <PurchaseSupportStrip className="mb-14" />
 
       <section className="mb-14">
         <h2 className="font-serif text-2xl font-semibold mb-6">

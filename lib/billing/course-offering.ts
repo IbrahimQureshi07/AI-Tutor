@@ -3,6 +3,8 @@
  * Keep claims accurate — only list features the app actually ships.
  */
 
+import { BRAND } from "@/lib/brand";
+
 export type CourseFeature = {
   title: string;
   description: string;
@@ -21,8 +23,7 @@ export const COURSE_FEATURES: CourseFeature[] = [
   },
   {
     title: "AI tutor chat",
-    description:
-      "Get hints and explanations on practice and assessment questions — available whenever you study.",
+    description: `Get hints and explanations from ${BRAND.shortName} ${BRAND.productName} on practice and assessment questions — available whenever you study.`,
   },
   {
     title: "Mastery & readiness tracking",

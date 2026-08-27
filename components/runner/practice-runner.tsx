@@ -591,36 +591,45 @@ export function PracticeRunner({
         />
       )}
 
-      {/* PRIMARY QUESTION CARD */}
-      <QuestionPanel
-        q={slot.primary}
-        index={index}
-        total={total}
-        variant="primary"
-        disabled={slot.phase !== "ask"}
-        selected={slot.primarySelected}
-        showRevealed={slot.phase !== "ask"}
-        hint={slot.hint}
-        hintLoading={slot.hintLoading}
-        explanationRevealed={slot.phase !== "ask"}
-        origin={questionOrigins?.[slot.primary.id]}
-        onAnswer={onPrimaryOptionTap}
-        onAskAI={() =>
-          openChat({
-            id: slot.primary.id,
-            section_code: slot.primary.section_code,
-            prompt: slot.primary.prompt,
-            option_a: slot.primary.option_a,
-            option_b: slot.primary.option_b,
-            option_c: slot.primary.option_c,
-            option_d: slot.primary.option_d,
-            correct_option: slot.primary.correct_option,
-            hint: slot.primary.hint,
-            explanation: slot.primary.explanation,
-            user_answer: slot.primarySelected,
-          })
-        }
-      />
+      {/* PRIMARY — full card on ask/reveal; collapsed once a follow-up is in play */}
+      {slot.phase === "ask" || slot.phase === "reveal" ? (
+        <QuestionPanel
+          q={slot.primary}
+          index={index}
+          total={total}
+          variant="primary"
+          disabled={slot.phase !== "ask"}
+          selected={slot.primarySelected}
+          showRevealed={slot.phase === "reveal"}
+          hint={slot.hint}
+          hintLoading={slot.hintLoading}
+          explanationRevealed={slot.phase === "reveal"}
+          origin={questionOrigins?.[slot.primary.id]}
+          onAnswer={onPrimaryOptionTap}
+          onAskAI={() =>
+            openChat({
+              id: slot.primary.id,
+              section_code: slot.primary.section_code,
+              prompt: slot.primary.prompt,
+              option_a: slot.primary.option_a,
+              option_b: slot.primary.option_b,
+              option_c: slot.primary.option_c,
+              option_d: slot.primary.option_d,
+              correct_option: slot.primary.correct_option,
+              hint: slot.primary.hint,
+              explanation: slot.primary.explanation,
+              user_answer: slot.primarySelected,
+            })
+          }
+        />
+      ) : (
+        <PrimaryCollapsedSummary
+          q={slot.primary}
+          selected={slot.primarySelected}
+          index={index}
+          total={total}
+        />
+      )}
 
       {coachEnabled && slot.phase === "ask" && slot.primarySelected && (
         <div className="flex flex-col items-end gap-1 pt-1">
@@ -654,25 +663,11 @@ export function PracticeRunner({
 
       {slot.phase === "sibling-ask" && slot.sibling && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2 text-xs text-ink-muted">
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            <span className="uppercase tracking-wide font-medium">
-              {isMistakes
-                ? "Extra try · same concept · harder"
-                : "Extra try · same concept"}
-            </span>
-            {slot.siblingSource === "ai" && (
-              <Badge variant="outline" className="text-[10px]">
-                AI-written
-              </Badge>
-            )}
-            {slot.siblingSource === "bank" && (
-              <Badge variant="outline" className="text-[10px]">
-                From bank
-              </Badge>
-            )}
-            <span className="text-ink-muted">· not counted toward total</span>
-          </div>
+          <SiblingChrome
+            isMistakes={isMistakes}
+            source={slot.siblingSource}
+            total={total}
+          />
           <QuestionPanel
             q={slot.sibling}
             index={index}
@@ -707,12 +702,40 @@ export function PracticeRunner({
         </div>
       )}
 
-      {slot.phase === "sibling-done" && slot.sibling && slot.label && (
-        <LabelPanel
-          label={slot.label}
-          siblingQ={slot.sibling}
-          siblingAnswer={slot.siblingSelected}
-        />
+      {/* After follow-up: reveal ONLY the follow-up card — never mix with primary greens */}
+      {slot.phase === "sibling-done" && slot.sibling && (
+        <div className="space-y-3">
+          <SiblingChrome
+            isMistakes={isMistakes}
+            source={slot.siblingSource}
+            total={total}
+            done
+          />
+          <QuestionPanel
+            q={slot.sibling}
+            index={index}
+            total={total}
+            variant="sibling"
+            disabled
+            selected={slot.siblingSelected}
+            showRevealed
+            hint={null}
+            hintLoading={false}
+            explanationRevealed
+            onAnswer={() => {}}
+          />
+          {slot.label && (
+            <LabelPanel
+              label={slot.label}
+              siblingQ={slot.sibling}
+              siblingAnswer={slot.siblingSelected}
+            />
+          )}
+        </div>
+      )}
+
+      {slot.phase === "sibling-done" && !slot.sibling && slot.label && (
+        <LabelPanel label={slot.label} />
       )}
 
       {slot.phase === "reveal" && slot.label && (
@@ -931,10 +954,10 @@ function LabelPanel({
       {siblingQ && siblingAnswer && correctLetter && (
         <div className="mt-3 pt-3 border-t border-border text-sm">
           <div className="text-xs uppercase tracking-widest text-ink-muted mb-1">
-            Follow-up answer
+            Follow-up result
           </div>
-          <div className="text-ink-muted">
-            You picked{" "}
+          <p className="text-ink-muted">
+            On this follow-up you picked{" "}
             <span
               className={cn(
                 "font-medium",
@@ -945,14 +968,80 @@ function LabelPanel({
             >
               {siblingAnswer}
             </span>
-            . Correct was{" "}
-            <span className="font-medium text-ink">{correctLetter}</span>.
-          </div>
-          {siblingQ.explanation && (
-            <p className="mt-2 text-ink leading-relaxed">{siblingQ.explanation}</p>
-          )}
+            . Correct option was{" "}
+            <span className="font-medium text-ink">{correctLetter}</span>
+            .
+          </p>
+          {/* Full explanation lives on the follow-up card above — don't paste another question's text here. */}
         </div>
       )}
+    </div>
+  );
+}
+
+function SiblingChrome({
+  isMistakes,
+  source,
+  total,
+  done = false,
+}: {
+  isMistakes: boolean;
+  source: "ai" | "bank" | null;
+  total: number;
+  done?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2 text-xs text-ink-muted flex-wrap">
+      <Sparkles className="h-3.5 w-3.5 text-primary" />
+      <span className="uppercase tracking-wide font-medium">
+        {done
+          ? "Follow-up reviewed"
+          : isMistakes
+            ? "Extra try · same concept · harder"
+            : "Extra try · same concept"}
+      </span>
+      {source === "ai" && (
+        <Badge variant="outline" className="text-[10px]">
+          AI-written
+        </Badge>
+      )}
+      {source === "bank" && (
+        <Badge variant="outline" className="text-[10px]">
+          From bank
+        </Badge>
+      )}
+      <span className="text-ink-muted">· not counted toward your {total}</span>
+    </div>
+  );
+}
+
+/** Compact strip so primary greens never sit next to a follow-up “Correct was X”. */
+function PrimaryCollapsedSummary({
+  q,
+  selected,
+  index,
+  total,
+}: {
+  q: QuestionRow;
+  selected: "A" | "B" | "C" | "D" | null;
+  index: number;
+  total: number;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-elevated/50 px-4 py-3 text-sm">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="text-xs uppercase tracking-widest text-ink-muted">
+          Original Q{index + 1}/{total} · reviewed
+        </div>
+        <div className="text-xs text-ink-muted">
+          You picked{" "}
+          <span className="font-medium text-ink">{selected ?? "—"}</span>
+          {" · "}
+          Correct was{" "}
+          <span className="font-medium text-ink">{q.correct_option}</span>
+        </div>
+      </div>
+      <p className="mt-1.5 text-ink-muted line-clamp-2 leading-snug">{q.prompt}</p>
     </div>
   );
 }

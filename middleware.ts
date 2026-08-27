@@ -3,6 +3,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { getAccessState } from "@/lib/access/check-access";
 import {
   clearAccessGate,
+  hasSupabaseAuthCookie,
   readAccessGate,
   readBootstrapDone,
   writeAccessGate,
@@ -39,6 +40,10 @@ function isPaywallExempt(pathname: string): boolean {
   );
 }
 
+function isAuthEntryPath(pathname: string): boolean {
+  return pathname === "/login" || pathname === "/signup" || pathname === "/unlock";
+}
+
 function redirectTo(
   request: NextRequest,
   pathname: string,
@@ -55,6 +60,52 @@ function redirectTo(
 }
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (pathname.startsWith("/api")) {
+    return NextResponse.next({ request });
+  }
+
+  const isPublic = isPublicPath(pathname);
+  const hasSession = hasSupabaseAuthCookie(request);
+  const gate = readAccessGate(request);
+  const bootDone = readBootstrapDone(request);
+
+  // Logged-out + protected: cookie check only (no Auth network).
+  if (!hasSession && !isPublic && !pathname.startsWith("/_next")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set("redirectTo", pathname);
+    const res = NextResponse.redirect(url);
+    clearAccessGate(res);
+    return res;
+  }
+
+  // Logged-out + public marketing/auth pages: pass through.
+  if (!hasSession) {
+    return NextResponse.next({ request });
+  }
+
+  // Paid session, gate still warm: skip getUser + getAccessState.
+  if (gate === "ok") {
+    if (isAuthEntryPath(pathname)) {
+      return redirectTo(request, "/dashboard", "ok", bootDone);
+    }
+    return NextResponse.next({ request });
+  }
+
+  // Locked session, gate still warm: skip getUser + getAccessState.
+  if (gate === "lock") {
+    if (pathname === "/login" || pathname === "/signup") {
+      return redirectTo(request, "/unlock", "lock", bootDone);
+    }
+    if (!isPublic && !isPaywallExempt(pathname)) {
+      return redirectTo(request, "/unlock", "lock", bootDone);
+    }
+    return NextResponse.next({ request });
+  }
+
+  // Cold gate: validate with Auth and refresh the 90s cookie.
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -80,44 +131,27 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
-
-  if (pathname.startsWith("/api")) {
+  if (!user) {
+    clearAccessGate(response);
+    if (!isPublic && !pathname.startsWith("/_next")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("redirectTo", pathname);
+      const res = NextResponse.redirect(url);
+      clearAccessGate(res);
+      return res;
+    }
     return response;
   }
 
-  const isPublic = isPublicPath(pathname);
-
-  if (!user && !isPublic && !pathname.startsWith("/_next")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("redirectTo", pathname);
-    const res = NextResponse.redirect(url);
-    clearAccessGate(res);
-    return res;
-  }
-
   let didBootstrap = false;
-  if (
-    user &&
-    isBootstrapAdminEmail(user.email) &&
-    !readBootstrapDone(request)
-  ) {
+  if (isBootstrapAdminEmail(user.email) && !bootDone) {
     await maybeBootstrapAdmin(supabase, user);
     writeBootstrapDone(response);
     didBootstrap = true;
   }
 
   if (pathname === "/unlock") {
-    if (!user) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
-      url.searchParams.set("redirectTo", "/unlock");
-      return NextResponse.redirect(url);
-    }
-    if (readAccessGate(request) === "ok") {
-      return redirectTo(request, "/dashboard", "ok", didBootstrap);
-    }
     const access = await getAccessState(supabase, user);
     if (access.hasFullAccess) {
       return redirectTo(request, "/dashboard", "ok", didBootstrap);
@@ -126,7 +160,7 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  if (user && (pathname === "/login" || pathname === "/signup")) {
+  if (pathname === "/login" || pathname === "/signup") {
     const access = await getAccessState(supabase, user);
     return redirectTo(
       request,
@@ -136,29 +170,12 @@ export async function middleware(request: NextRequest) {
     );
   }
 
-  if (
-    user &&
-    !isPublic &&
-    !isPaywallExempt(pathname) &&
-    !pathname.startsWith("/_next")
-  ) {
-    const cached = readAccessGate(request);
-    if (cached === "ok") {
-      return response;
-    }
-    if (cached === "lock") {
-      return redirectTo(request, "/unlock", "lock", didBootstrap);
-    }
-
+  if (!isPublic && !isPaywallExempt(pathname) && !pathname.startsWith("/_next")) {
     const access = await getAccessState(supabase, user);
     if (access.migrationApplied && access.needsPaywall) {
       return redirectTo(request, "/unlock", "lock", didBootstrap);
     }
     writeAccessGate(response, "ok");
-  }
-
-  if (!user) {
-    clearAccessGate(response);
   }
 
   return response;

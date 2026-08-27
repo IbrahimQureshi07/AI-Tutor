@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth/require-admin";
 
 export default async function AdminLayout({
@@ -8,8 +7,7 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const guard = await requireAdmin(supabase);
+  const guard = await requireAdmin();
   if (!guard.ok) {
     if (guard.reason === "unauthorized") {
       redirect("/login?redirectTo=/admin");

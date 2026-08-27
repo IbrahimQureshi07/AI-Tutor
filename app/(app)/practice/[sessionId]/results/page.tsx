@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireAppUser } from "@/lib/auth/request-session";
 import { SECTIONS } from "@/lib/constants";
 import { PracticeResultsView } from "@/components/practice/practice-results";
 import {
@@ -17,11 +17,7 @@ export default async function PracticeResults({
   params: Promise<{ sessionId: string }>;
 }) {
   const { sessionId } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { supabase, user } = await requireAppUser();
 
   const { data: session } = await supabase
     .from("sessions")

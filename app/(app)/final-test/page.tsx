@@ -1,7 +1,5 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import { isUserAdmin } from "@/lib/auth/bootstrap-admin";
+import { requireAppUser, getAppShell } from "@/lib/auth/request-session";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,13 +9,9 @@ import { getFinalPoolStatus } from "@/lib/final/pick-questions";
 import { FinalStartPicker } from "@/components/final/final-start-picker";
 
 export default async function FinalTestIntro() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const isAdmin = await isUserAdmin(supabase, user);
+  const { supabase, user } = await requireAppUser();
+  const shell = await getAppShell();
+  const isAdmin = shell?.showAdmin ?? false;
   const [gate, pool] = await Promise.all([
     getFinalGateStatus(supabase, user.id, isAdmin),
     getFinalPoolStatus(supabase, user.id),

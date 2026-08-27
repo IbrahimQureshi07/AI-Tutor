@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { SECTIONS, type SectionCode } from "@/lib/constants";
@@ -88,24 +89,27 @@ function emptyModeSessionStatus(): Record<ModeKey, ModeSessionStatus> {
   };
 }
 
-export async function getUserStats(
+async function loadUserStats(
   userId: string,
-  client?: SupabaseClient,
+  supabase: SupabaseClient,
 ): Promise<UserStats> {
   // Existing callers pass nothing → RLS-bound server client (self only).
   // Admin callers can pass a service-role client to read any user's stats.
-  const supabase = client ?? (await createClient());
+
+  const sevenDaysAgo = new Date(
+    Date.now() - 7 * 24 * 60 * 60 * 1000,
+  ).toISOString();
 
   const [
     { data: masteryRows },
     { data: recent },
     { data: daily },
     { count: mistakesCount },
-    { data: allAttempts },
-    { data: last7Attempts },
-    { count: todayCount },
+    { count: totalAttemptsCount },
+    { count: totalCorrectCount },
+    { count: last7Total },
+    { count: last7Correct },
     { data: finishedRecent },
-    { data: finishedModes },
     { data: sessionStatusRows },
   ] = await Promise.all([
     supabase.from("v_user_section_mastery").select("*").eq("user_id", userId),
@@ -128,18 +132,24 @@ export async function getUserStats(
       .eq("resolved", false),
     supabase
       .from("attempts")
-      .select("is_correct")
+      .select("id", { count: "exact", head: true })
       .eq("user_id", userId),
-    supabase
-      .from("attempts")
-      .select("is_correct")
-      .eq("user_id", userId)
-      .gte("created_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
     supabase
       .from("attempts")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
-      .gte("created_at", new Date(new Date().toDateString()).toISOString()),
+      .eq("is_correct", true),
+    supabase
+      .from("attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .gte("created_at", sevenDaysAgo),
+    supabase
+      .from("attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("is_correct", true)
+      .gte("created_at", sevenDaysAgo),
     supabase
       .from("sessions")
       .select("mode, score_pct, finished_at, duration_ms, status")
@@ -150,29 +160,19 @@ export async function getUserStats(
       .limit(400),
     supabase
       .from("sessions")
-      .select("mode")
-      .eq("user_id", userId)
-      .eq("status", "finished")
-      .limit(2000),
-    supabase
-      .from("sessions")
       .select("mode, status")
       .eq("user_id", userId),
   ]);
 
-  const totalAttempts = allAttempts?.length ?? 0;
-  const totalCorrect = allAttempts?.filter((a) => a.is_correct).length ?? 0;
+  const totalAttempts = totalAttemptsCount ?? 0;
+  const totalCorrect = totalCorrectCount ?? 0;
   const overallAccuracy = totalAttempts
     ? Math.round((100 * totalCorrect) / totalAttempts)
     : 0;
   const sevenDayAccuracy =
-    last7Attempts?.length
-      ? Math.round(
-          (100 * last7Attempts.filter((a) => a.is_correct).length) /
-            last7Attempts.length,
-        )
+    last7Total
+      ? Math.round((100 * (last7Correct ?? 0)) / last7Total)
       : 0;
-  const attemptsToday = todayCount ?? 0;
 
   // mastery
   const masteryMap = new Map<string, { total: number; correct: number; accuracy: number }>();
@@ -251,6 +251,9 @@ export async function getUserStats(
 
   const cutoff30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const dailyRows = ((daily ?? []) as { day: string; attempts: number; correct: number }[]) || [];
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const attemptsToday =
+    dailyRows.find((x) => x.day === todayKey)?.attempts ?? 0;
   let activeDaysLast30 = 0;
   for (let i = 0; i < 30; i++) {
     const d = new Date();
@@ -269,11 +272,6 @@ export async function getUserStats(
     }>;
 
   const modeTotals = emptyModeTotals();
-  for (const row of (finishedModes ?? []) as { mode: string }[]) {
-    const m = row.mode as keyof ModeSessionTotals;
-    if (m in modeTotals) modeTotals[m] += 1;
-  }
-
   const modeSessionStatus = emptyModeSessionStatus();
   let totalFinishedSessions = 0;
   for (const row of (sessionStatusRows ?? []) as { mode: string; status: string }[]) {
@@ -282,6 +280,7 @@ export async function getUserStats(
     if (row.status === "finished") {
       modeSessionStatus[m].finished += 1;
       totalFinishedSessions += 1;
+      if (m in modeTotals) modeTotals[m] += 1;
     } else if (row.status === "in_progress" || row.status === "abandoned") {
       modeSessionStatus[m].partial += 1;
     }
@@ -339,4 +338,17 @@ export async function getUserStats(
     lastMockScore,
     lastPracticeScore,
   };
+}
+
+const getCachedSelfStats = cache(async (userId: string) => {
+  const supabase = await createClient();
+  return loadUserStats(userId, supabase);
+});
+
+export async function getUserStats(
+  userId: string,
+  client?: SupabaseClient,
+): Promise<UserStats> {
+  if (client) return loadUserStats(userId, client);
+  return getCachedSelfStats(userId);
 }

@@ -1,21 +1,16 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Lock, ArrowRight, Target, CheckCircle2, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { SECTIONS } from "@/lib/constants";
 import { formatSectionDisplayLabel } from "@/lib/sections/display-label";
-import { createClient } from "@/lib/supabase/server";
 import { getAssessmentCoverage } from "@/lib/assessment/coverage";
 import { PracticeStartPicker } from "@/components/practice/practice-start-picker";
+import { requireAppUser } from "@/lib/auth/request-session";
 
 export default async function PracticeIntro() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { supabase, user } = await requireAppUser();
 
   const coverage = await getAssessmentCoverage(supabase, user.id);
 

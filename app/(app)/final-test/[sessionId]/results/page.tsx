@@ -1,5 +1,5 @@
 import { loadSessionAttempts } from "@/lib/runner/loader";
-import { createClient } from "@/lib/supabase/server";
+import { requireAppUser } from "@/lib/auth/request-session";
 import {
   buildFinalReport,
   predictedPassProbability,
@@ -56,7 +56,7 @@ export default async function FinalTestResults({
   // (lib/final/completion.ts) can read pass/fail per portion for cooldown
   // and partial-retake state. Merge — don't clobber.
   if (!cfg.report) {
-    const supabase = await createClient();
+    const { supabase } = await requireAppUser();
     const reportSummary = {
       nationalPct: report.nationalPct,
       statePct: report.statePct,

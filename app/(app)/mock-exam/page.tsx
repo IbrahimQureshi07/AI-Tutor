@@ -1,7 +1,5 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import { isUserAdmin } from "@/lib/auth/bootstrap-admin";
+import { getAppShell, requireAppUser } from "@/lib/auth/request-session";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Lock, ArrowRight } from "lucide-react";
@@ -13,11 +11,7 @@ import { getMockWeaknessPreview } from "@/lib/mock/pick-questions";
 import { MockStartPicker } from "@/components/mock/mock-start-picker";
 
 export default async function MockExamIntro() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { supabase, user } = await requireAppUser();
 
   const [mistakesDone, mistakesProgress] = await Promise.all([
     hasFinishedMistakes(supabase, user.id),
@@ -76,16 +70,16 @@ export default async function MockExamIntro() {
     );
   }
 
-  const [{ weakest, signalSize }, isAdmin] = await Promise.all([
+  const [{ weakest, signalSize }, shell] = await Promise.all([
     getMockWeaknessPreview(supabase, user.id, 3),
-    isUserAdmin(supabase, user),
+    getAppShell(),
   ]);
 
   return (
     <MockStartPicker
       weakest={weakest}
       signalSize={signalSize}
-      isAdmin={isAdmin}
+      isAdmin={shell?.showAdmin ?? false}
     />
   );
 }

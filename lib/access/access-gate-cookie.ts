@@ -17,6 +17,13 @@ const cookieBase = {
   path: "/",
 };
 
+/** True if a Supabase SSR auth cookie is present (no Auth API call). */
+export function hasSupabaseAuthCookie(request: NextRequest): boolean {
+  return request.cookies.getAll().some(
+    (c) => c.name.includes("auth-token") && c.value.length > 0,
+  );
+}
+
 export function readAccessGate(request: NextRequest): AccessGateValue | null {
   const v = request.cookies.get(ACCESS_GATE_COOKIE)?.value;
   if (v === "ok" || v === "lock") return v;

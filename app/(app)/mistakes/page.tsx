@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { requireAppUser } from "@/lib/auth/request-session";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Lock, ArrowRight } from "lucide-react";
@@ -12,11 +11,7 @@ import { MISTAKES_TOTAL } from "@/lib/mistakes/pick-questions";
 import { MistakesStartPicker } from "@/components/mistakes/mistakes-start-picker";
 
 export default async function MistakesIntro() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { supabase, user } = await requireAppUser();
 
   const [practiceDone, poolRes, progress] = await Promise.all([
     hasFinishedPractice(supabase, user.id),

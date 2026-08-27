@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { Suspense } from "react";
+import { getAppShell, requireAppUser } from "@/lib/auth/request-session";
 import { getUserStats } from "@/lib/kpi/stats";
 import {
   getAssessmentCoverage,
@@ -8,19 +8,21 @@ import {
 import { hasFinishedPractice } from "@/lib/practice/completion";
 import { formatSectionDisplayLabel } from "@/lib/sections/display-label";
 import { DashboardHome } from "@/components/dashboard/dashboard-home";
+import { PageLoadingSkeleton } from "@/components/app/page-loading-skeleton";
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  await requireAppUser();
+  return (
+    <Suspense fallback={<PageLoadingSkeleton />}>
+      <DashboardBody />
+    </Suspense>
+  );
+}
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, target_exam_date")
-    .eq("id", user.id)
-    .maybeSingle();
+async function DashboardBody() {
+  const shell = await getAppShell();
+  if (!shell) return null;
+  const { supabase, user, profile } = shell;
 
   const [stats, coverage, practiceComplete] = await Promise.all([
     getUserStats(user.id),

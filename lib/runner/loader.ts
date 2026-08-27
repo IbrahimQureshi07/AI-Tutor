@@ -1,13 +1,9 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireAppUser } from "@/lib/auth/request-session";
 import type { QuestionRow } from "@/lib/supabase/types";
 
 export async function loadSessionAndQuestions(sessionId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { supabase, user } = await requireAppUser();
 
   const { data: session } = await supabase
     .from("sessions")
@@ -28,7 +24,6 @@ export async function loadSessionAndQuestions(sessionId: string) {
     .select("*")
     .in("id", ids);
 
-  // Preserve ordering from config.question_ids
   const byId = new Map((rows ?? []).map((r) => [r.id, r]));
   const questions = ids.map((id) => byId.get(id)).filter(Boolean) as QuestionRow[];
 
@@ -36,11 +31,7 @@ export async function loadSessionAndQuestions(sessionId: string) {
 }
 
 export async function loadSessionAttempts(sessionId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { supabase, user } = await requireAppUser();
 
   const { data: session } = await supabase
     .from("sessions")

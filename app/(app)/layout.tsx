@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { Sidebar } from "@/components/app/sidebar";
 import { Topbar } from "@/components/app/topbar";
 import { MobileNav } from "@/components/app/mobile-nav";
+import { PageLoadingSkeleton } from "@/components/app/page-loading-skeleton";
 import { ChatSheetProvider } from "@/components/chat/chat-sheet-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getAppShell } from "@/lib/auth/request-session";
@@ -23,8 +25,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               fullName={profile?.full_name ?? null}
               showAdmin={showAdmin}
             />
-            <main className="flex-1 px-5 md:px-8 py-6 md:py-10 pb-24 lg:pb-10 max-w-6xl w-full mx-auto animate-fade-in">
-              {children}
+            <main className="flex-1 px-5 md:px-8 py-6 md:py-10 pb-24 lg:pb-10 max-w-6xl w-full mx-auto">
+              <Suspense fallback={<PageLoadingSkeleton />}>{children}</Suspense>
             </main>
           </div>
           <MobileNav showAdmin={showAdmin} />

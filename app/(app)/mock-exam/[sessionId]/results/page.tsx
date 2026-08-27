@@ -1,11 +1,10 @@
-import { redirect } from "next/navigation";
 import { MockReport, type MockAttempt } from "@/components/mock/mock-report";
 import { loadSessionAttempts } from "@/lib/runner/loader";
 import { buildMockReport } from "@/lib/mock/report";
 import { MOCK_PASS_PCT } from "@/lib/mock/pick-questions";
 import { generateMockNote } from "@/lib/mock/results-note";
 import { loadJourney } from "@/lib/journey/load";
-import { createClient } from "@/lib/supabase/server";
+import { requireAppUser } from "@/lib/auth/request-session";
 import { SECTIONS } from "@/lib/constants";
 import type { QuestionRow } from "@/lib/supabase/types";
 import { sanitizePlan, type DebriefPlan } from "@/lib/coach/debrief-plan";
@@ -64,11 +63,7 @@ export default async function MockExamResults({
     passPct,
   });
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const { supabase, user } = await requireAppUser();
 
   const journey = await loadJourney(supabase, user.id);
   const sectionTitles = Object.fromEntries(

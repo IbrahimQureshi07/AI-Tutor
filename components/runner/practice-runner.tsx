@@ -591,45 +591,43 @@ export function PracticeRunner({
         />
       )}
 
-      {/* PRIMARY — full card on ask/reveal; collapsed once a follow-up is in play */}
-      {slot.phase === "ask" || slot.phase === "reveal" ? (
-        <QuestionPanel
-          q={slot.primary}
-          index={index}
-          total={total}
-          variant="primary"
-          disabled={slot.phase !== "ask"}
-          selected={slot.primarySelected}
-          showRevealed={slot.phase === "reveal"}
-          hint={slot.hint}
-          hintLoading={slot.hintLoading}
-          explanationRevealed={slot.phase === "reveal"}
-          origin={questionOrigins?.[slot.primary.id]}
-          onAnswer={onPrimaryOptionTap}
-          onAskAI={() =>
-            openChat({
-              id: slot.primary.id,
-              section_code: slot.primary.section_code,
-              prompt: slot.primary.prompt,
-              option_a: slot.primary.option_a,
-              option_b: slot.primary.option_b,
-              option_c: slot.primary.option_c,
-              option_d: slot.primary.option_d,
-              correct_option: slot.primary.correct_option,
-              hint: slot.primary.hint,
-              explanation: slot.primary.explanation,
-              user_answer: slot.primarySelected,
-            })
-          }
-        />
-      ) : (
-        <PrimaryCollapsedSummary
-          q={slot.primary}
-          selected={slot.primarySelected}
-          index={index}
-          total={total}
-        />
-      )}
+      {/* PRIMARY — stays fully open (revealed) while follow-up runs below */}
+      <QuestionPanel
+        q={slot.primary}
+        index={index}
+        total={total}
+        variant="primary"
+        disabled={slot.phase !== "ask"}
+        selected={slot.primarySelected}
+        showRevealed={slot.phase !== "ask"}
+        hint={slot.hint}
+        hintLoading={slot.hintLoading}
+        explanationRevealed={slot.phase !== "ask"}
+        origin={questionOrigins?.[slot.primary.id]}
+        phaseBadge={
+          slot.phase === "sibling-loading" ||
+          slot.phase === "sibling-ask" ||
+          slot.phase === "sibling-done"
+            ? "Original"
+            : undefined
+        }
+        onAnswer={onPrimaryOptionTap}
+        onAskAI={() =>
+          openChat({
+            id: slot.primary.id,
+            section_code: slot.primary.section_code,
+            prompt: slot.primary.prompt,
+            option_a: slot.primary.option_a,
+            option_b: slot.primary.option_b,
+            option_c: slot.primary.option_c,
+            option_d: slot.primary.option_d,
+            correct_option: slot.primary.correct_option,
+            hint: slot.primary.hint,
+            explanation: slot.primary.explanation,
+            user_answer: slot.primarySelected,
+          })
+        }
+      />
 
       {coachEnabled && slot.phase === "ask" && slot.primarySelected && (
         <div className="flex flex-col items-end gap-1 pt-1">
@@ -679,6 +677,7 @@ export function PracticeRunner({
             hint={null}
             hintLoading={false}
             explanationRevealed={false}
+            phaseBadge="Follow-up"
             onAnswer={onSiblingAnswer}
           />
         </div>
@@ -702,7 +701,7 @@ export function PracticeRunner({
         </div>
       )}
 
-      {/* After follow-up: reveal ONLY the follow-up card — never mix with primary greens */}
+      {/* Follow-up answered: keep original open above; show follow-up reveal here */}
       {slot.phase === "sibling-done" && slot.sibling && (
         <div className="space-y-3">
           <SiblingChrome
@@ -722,6 +721,7 @@ export function PracticeRunner({
             hint={null}
             hintLoading={false}
             explanationRevealed
+            phaseBadge="Follow-up"
             onAnswer={() => {}}
           />
           {slot.label && (
@@ -773,6 +773,7 @@ function QuestionPanel({
   hintLoading,
   explanationRevealed,
   origin,
+  phaseBadge,
   onAnswer,
   onAskAI,
 }: {
@@ -787,6 +788,8 @@ function QuestionPanel({
   hintLoading: boolean;
   explanationRevealed: boolean;
   origin?: QuestionOrigin;
+  /** Clear label so Original greens are never confused with Follow-up text */
+  phaseBadge?: string;
   onAnswer: (letter: "A" | "B" | "C" | "D") => void;
   onAskAI?: () => void;
 }) {
@@ -806,7 +809,15 @@ function QuestionPanel({
       )}
     >
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-2 text-sm flex-wrap">
+          {phaseBadge && (
+            <Badge
+              variant={variant === "sibling" ? "default" : "outline"}
+              className="text-[10px] uppercase tracking-wide"
+            >
+              {phaseBadge}
+            </Badge>
+          )}
           <Badge variant="outline" className="text-left whitespace-normal font-normal leading-snug max-w-[min(100%,22rem)]">
             {formatSectionDisplayLabel(q.section_code)}
           </Badge>
@@ -1011,37 +1022,6 @@ function SiblingChrome({
         </Badge>
       )}
       <span className="text-ink-muted">· not counted toward your {total}</span>
-    </div>
-  );
-}
-
-/** Compact strip so primary greens never sit next to a follow-up “Correct was X”. */
-function PrimaryCollapsedSummary({
-  q,
-  selected,
-  index,
-  total,
-}: {
-  q: QuestionRow;
-  selected: "A" | "B" | "C" | "D" | null;
-  index: number;
-  total: number;
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-elevated/50 px-4 py-3 text-sm">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="text-xs uppercase tracking-widest text-ink-muted">
-          Original Q{index + 1}/{total} · reviewed
-        </div>
-        <div className="text-xs text-ink-muted">
-          You picked{" "}
-          <span className="font-medium text-ink">{selected ?? "—"}</span>
-          {" · "}
-          Correct was{" "}
-          <span className="font-medium text-ink">{q.correct_option}</span>
-        </div>
-      </div>
-      <p className="mt-1.5 text-ink-muted line-clamp-2 leading-snug">{q.prompt}</p>
     </div>
   );
 }

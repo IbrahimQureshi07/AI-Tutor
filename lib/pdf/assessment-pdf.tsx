@@ -18,8 +18,8 @@ import { PDF_BRAND } from "@/lib/brand";
 
 /* ─── Brand colours (matching app globals.css) ─── */
 const C = {
-  primary: "#C15F3C",
-  primaryLight: "#E7CFBF",
+  primary: "#B85F0E",
+  primaryLight: "#EDD5BC",
   bg: "#F7F4EE",
   surface: "#FFFFFF",
   ink: "#1F1B17",
@@ -31,7 +31,7 @@ const C = {
   warnBg: "#F5E6CC",
   danger: "#AE3C22",
   dangerBg: "#F5D7CF",
-  national: "#C15F3C",
+  national: "#B85F0E",
   state: "#7A5C3A",
   gray: "#E8E0D4",
   white: "#FFFFFF",

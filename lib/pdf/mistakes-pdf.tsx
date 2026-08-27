@@ -18,8 +18,8 @@ import { PDF_BRAND } from "@/lib/brand";
 
 /* ─── Brand colours ─── */
 const C = {
-  primary: "#C15F3C",
-  primaryLight: "#E7CFBF",
+  primary: "#B85F0E",
+  primaryLight: "#EDD5BC",
   bg: "#F7F4EE",
   surface: "#FFFFFF",
   ink: "#1F1B17",

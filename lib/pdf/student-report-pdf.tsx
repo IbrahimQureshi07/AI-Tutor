@@ -19,8 +19,8 @@ import { PDF_BRAND } from "@/lib/brand";
 
 /* ─── Brand colours (mirror final-pdf) ─── */
 const C = {
-  primary: "#C15F3C",
-  primaryLight: "#E7CFBF",
+  primary: "#B85F0E",
+  primaryLight: "#EDD5BC",
   bg: "#F7F4EE",
   surface: "#FFFFFF",
   ink: "#1F1B17",
@@ -36,7 +36,7 @@ const C = {
   nationalLight: "#DDE8F5",
   state: "#7A5C9A",
   stateLight: "#EDE5F5",
-  assessment: "#C15F3C",
+  assessment: "#B85F0E",
   practice: "#5C8DC4",
   mistakes: "#C48230",
   mock: "#7A5C9A",

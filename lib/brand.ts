@@ -44,9 +44,10 @@ export const BRAND = {
     logo: "/brand/fa-logo.png",
   },
 
-  /** Approximate brand orange from FA logo (for future CSS tuning) */
+  /** FA logo orange + soft companion (keep in sync with globals.css / PDFs) */
   colors: {
     burntOrange: "#B85F0E",
+    burntOrangeSoft: "#EDD5BC",
   },
 } as const;
 

@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  /* Claude-inspired warm palette */
+  /* Fortune Academy — burnt orange on warm paper */
   --background: 38 33% 95%;        /* #F7F4EE cream */
   --surface: 0 0% 100%;
   --elevated: 37 42% 97%;
@@ -17,9 +17,9 @@
   --popover: 0 0% 100%;
   --popover-foreground: 28 12% 11%;
 
-  --primary: 16 52% 50%;           /* #C15F3C terracotta */
+  --primary: 29 86% 39%;           /* #B85F0E FA burnt orange */
   --primary-foreground: 38 40% 97%;
-  --primary-soft: 22 50% 83%;      /* #E7CFBF */
+  --primary-soft: 30 48% 85%;      /* warm peach companion */
 
   --secondary: 35 25% 94%;
   --secondary-foreground: 28 12% 11%;
@@ -27,8 +27,8 @@
   --muted: 35 22% 92%;
   --muted-foreground: 30 9% 34%;
 
-  --accent: 22 50% 83%;
-  --accent-foreground: 16 52% 30%;
+  --accent: 30 48% 85%;
+  --accent-foreground: 29 70% 28%;
 
   --destructive: 8 60% 45%;
   --destructive-foreground: 38 40% 97%;
@@ -39,7 +39,7 @@
 
   --border: 33 18% 86%;
   --input: 33 18% 88%;
-  --ring: 16 52% 50%;
+  --ring: 29 86% 39%;
 
   --radius: 0.9rem;
 }
@@ -58,9 +58,9 @@
   --popover: 33 15% 10%;
   --popover-foreground: 36 28% 90%;
 
-  --primary: 16 62% 58%;
+  --primary: 29 78% 54%;           /* brighter FA orange on dark */
   --primary-foreground: 34 18% 7%;
-  --primary-soft: 16 35% 30%;
+  --primary-soft: 29 32% 24%;
 
   --secondary: 33 12% 16%;
   --secondary-foreground: 36 28% 90%;
@@ -68,8 +68,8 @@
   --muted: 33 12% 16%;
   --muted-foreground: 34 12% 68%;
 
-  --accent: 16 35% 26%;
-  --accent-foreground: 16 62% 78%;
+  --accent: 29 32% 22%;
+  --accent-foreground: 29 70% 72%;
 
   --destructive: 8 62% 48%;
   --destructive-foreground: 36 28% 90%;
@@ -80,7 +80,7 @@
 
   --border: 33 10% 20%;
   --input: 33 10% 22%;
-  --ring: 16 62% 58%;
+  --ring: 29 78% 54%;
 }
 
 * {
@@ -103,32 +103,32 @@ body {
 /* Subtle paper grain for warm feel */
 .bg-paper {
   background-image:
-    radial-gradient(circle at 20% 20%, rgba(193, 95, 60, 0.05), transparent 40%),
-    radial-gradient(circle at 80% 70%, rgba(193, 95, 60, 0.04), transparent 45%);
+    radial-gradient(circle at 20% 20%, rgba(184, 95, 14, 0.05), transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(184, 95, 14, 0.04), transparent 45%);
 }
 
 .dark .bg-paper {
   background-image:
-    radial-gradient(circle at 20% 20%, rgba(193, 95, 60, 0.12), transparent 40%),
-    radial-gradient(circle at 80% 70%, rgba(193, 95, 60, 0.10), transparent 45%);
+    radial-gradient(circle at 20% 20%, rgba(184, 95, 14, 0.12), transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(184, 95, 14, 0.10), transparent 45%);
 }
 
 .mesh-gradient {
   background:
-    radial-gradient(at 15% 20%, hsl(16 70% 62% / 0.55), transparent 45%),
-    radial-gradient(at 85% 15%, hsl(22 70% 78% / 0.6), transparent 50%),
-    radial-gradient(at 75% 85%, hsl(16 60% 55% / 0.45), transparent 55%),
+    radial-gradient(at 15% 20%, hsl(29 78% 55% / 0.50), transparent 45%),
+    radial-gradient(at 85% 15%, hsl(32 65% 78% / 0.55), transparent 50%),
+    radial-gradient(at 75% 85%, hsl(29 70% 48% / 0.40), transparent 55%),
     radial-gradient(at 15% 90%, hsl(38 55% 90% / 0.9), transparent 40%),
-    linear-gradient(135deg, hsl(38 45% 94%), hsl(22 40% 88%));
+    linear-gradient(135deg, hsl(38 45% 94%), hsl(30 40% 88%));
 }
 
 .dark .mesh-gradient {
   background:
-    radial-gradient(at 15% 20%, hsl(16 70% 40% / 0.55), transparent 45%),
-    radial-gradient(at 85% 15%, hsl(22 40% 25% / 0.7), transparent 50%),
-    radial-gradient(at 75% 85%, hsl(16 60% 35% / 0.55), transparent 55%),
+    radial-gradient(at 15% 20%, hsl(29 70% 36% / 0.55), transparent 45%),
+    radial-gradient(at 85% 15%, hsl(32 40% 24% / 0.7), transparent 50%),
+    radial-gradient(at 75% 85%, hsl(29 60% 32% / 0.55), transparent 55%),
     radial-gradient(at 15% 90%, hsl(34 14% 13% / 0.95), transparent 40%),
-    linear-gradient(135deg, hsl(34 18% 8%), hsl(22 20% 14%));
+    linear-gradient(135deg, hsl(34 18% 8%), hsl(28 20% 14%));
 }
 
 .shimmer {

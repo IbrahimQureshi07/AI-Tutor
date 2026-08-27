@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import { VoiceInputButton } from "@/components/chat/voice-input-button";
+import { BRAND } from "@/lib/brand";
 
 /* =====================================================================
  * CoachChat
@@ -453,7 +454,7 @@ function CoachConversation({
           <CoachAvatar pulse={!locked && sending} />
           <div className="min-w-0">
             <div className="font-semibold text-ink leading-tight flex items-center gap-2">
-              Tutor
+              {BRAND.shortName} {BRAND.productName}
               {!locked && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-widest text-success">
                   <span className="h-1.5 w-1.5 rounded-full bg-success" />

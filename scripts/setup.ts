@@ -122,7 +122,7 @@ async function maybeImportQuestions() {
 }
 
 async function main() {
-  console.log("AI Tutor — first-time setup\n");
+  console.log("Fortune Academy — first-time setup\n");
   await checkSchema();
   await ensureAdmin();
   await maybeImportQuestions();

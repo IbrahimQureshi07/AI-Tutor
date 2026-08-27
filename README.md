@@ -1,6 +1,6 @@
-# Tutor.sc — AI Tutor for the South Carolina Real Estate Exam
+# Fortune Academy — SC Real Estate Exam Prep
 
-A Claude-styled, Supabase-powered AI tutor. Five study modes (Assessment, Practice, Mistakes, Mock Exam, Final Test), a KPI-rich dashboard, and an always-on AI chat that can answer anything about the SC exam — and deep-link from any question.
+Fortune Academy of Real Estate AI tutor for the South Carolina real estate salesperson exam. Five study modes (Assessment, Practice, Mistakes, Mock Exam, Final Test), a KPI-rich dashboard, and always-on AI chat that can answer questions about the SC exam — and deep-link from any practice question.
 
 Built with **Next.js 15 (App Router)**, **Tailwind**, **shadcn-style UI**, **Framer Motion**, **Supabase**, and the **Vercel AI SDK** (pluggable Anthropic/OpenAI).
 

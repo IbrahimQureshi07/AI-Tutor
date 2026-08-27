@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SettingsForm } from "@/components/settings/settings-form";
+import { SalesSupportCard } from "@/components/brand/sales-support-card";
+import { BRAND } from "@/lib/brand";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -20,7 +22,9 @@ export default async function SettingsPage() {
     <div className="space-y-6 max-w-2xl">
       <div>
         <h1 className="font-serif text-4xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-ink-muted mt-1">Manage your profile and preferences.</p>
+        <p className="text-ink-muted mt-1">
+          Manage your profile and preferences with {BRAND.shortName}.
+        </p>
       </div>
 
       <Card>
@@ -48,6 +52,8 @@ export default async function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <SalesSupportCard />
     </div>
   );
 }

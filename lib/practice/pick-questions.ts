@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { SECTIONS, type SectionCode } from "@/lib/constants";
 import type { QuestionRow } from "@/lib/supabase/types";
 import { shuffle } from "@/lib/utils";
+import { rejectBlockedQuestions } from "@/lib/questions/blocked-ids";
 import {
   type DebriefPlan,
   FOCUS_MULTIPLIER,
@@ -193,7 +194,7 @@ async function fetchLevel(
     .eq("level", level)
     .eq("is_ai_generated", false)
     .limit(Math.min(500, need * 6));
-  return shuffle((data ?? []) as QuestionRow[]).slice(0, need);
+  return shuffle(rejectBlockedQuestions(data as QuestionRow[])).slice(0, need);
 }
 
 async function fillShortfall(
@@ -210,7 +211,7 @@ async function fillShortfall(
     .eq("pool", "standard")
     .eq("is_ai_generated", false)
     .limit(400);
-  const pool = shuffle((data ?? []) as QuestionRow[]).filter(
+  const pool = shuffle(rejectBlockedQuestions(data as QuestionRow[])).filter(
     (q) => !excludeIds.has(q.id),
   );
   return pool.slice(0, need);
@@ -362,7 +363,7 @@ export async function pickPracticeQuestions(
     .eq("is_ai_generated", false)
     .limit(need * 4);
   const ids = new Set(shuffled.map((q) => q.id));
-  const extra = shuffle((filler ?? []) as QuestionRow[]).filter(
+  const extra = shuffle(rejectBlockedQuestions(filler as QuestionRow[])).filter(
     (q) => !ids.has(q.id),
   );
   return shuffle([...shuffled, ...extra]).slice(0, target);

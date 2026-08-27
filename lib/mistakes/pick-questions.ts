@@ -3,6 +3,11 @@ import { SECTIONS, type SectionCode } from "@/lib/constants";
 import type { QuestionRow } from "@/lib/supabase/types";
 import { shuffle } from "@/lib/utils";
 import { allocateSectionCounts } from "@/lib/practice/pick-questions";
+import {
+  isQuestionBlocked,
+  rejectBlockedQuestions,
+  withBlockedExcluded,
+} from "@/lib/questions/blocked-ids";
 
 /**
  * Mistakes-test sizing — matches Practice so the experience feels symmetrical.
@@ -101,10 +106,13 @@ async function fetchQuestionsByIds(
     .eq("is_ai_generated", false);
 
   const byId = new Map<string, QuestionRow>(
-    ((data ?? []) as QuestionRow[]).map((q) => [q.id, q]),
+    rejectBlockedQuestions(data as QuestionRow[]).map((q) => [q.id, q]),
   );
   // Preserve the priority order from `ids`.
-  return ids.map((id) => byId.get(id)).filter(Boolean) as QuestionRow[];
+  return ids
+    .filter((id) => !isQuestionBlocked(id))
+    .map((id) => byId.get(id))
+    .filter(Boolean) as QuestionRow[];
 }
 
 async function fetchRecentQuestionIds(
@@ -139,7 +147,9 @@ async function fetchSectionLevel(
     .eq("is_ai_generated", false)
     .limit(Math.min(400, Math.max(need * 6, 30)));
 
-  const pool = ((data ?? []) as QuestionRow[]).filter((q) => !excludeIds.has(q.id));
+  const pool = rejectBlockedQuestions(data as QuestionRow[]).filter(
+    (q) => !excludeIds.has(q.id),
+  );
   return shuffle(pool).slice(0, need);
 }
 
@@ -197,7 +207,9 @@ async function fetchSectionFallback(
     .is("parent_question_id", null)
     .eq("is_ai_generated", false)
     .limit(200);
-  const pool = ((data ?? []) as QuestionRow[]).filter((q) => !excludeIds.has(q.id));
+  const pool = rejectBlockedQuestions(data as QuestionRow[]).filter(
+    (q) => !excludeIds.has(q.id),
+  );
   return shuffle(pool).slice(0, need);
 }
 
@@ -213,7 +225,9 @@ export async function pickMistakesQuestions(
   total: number = MISTAKES_TOTAL,
 ): Promise<MistakesPick> {
   const target = Math.max(1, Math.floor(total));
-  const allMistakes = rankMistakes(await fetchMistakes(supabase, userId));
+  const allMistakes = rankMistakes(await fetchMistakes(supabase, userId)).filter(
+    (m) => !isQuestionBlocked(m.question_id),
+  );
   const cappedMistakeIds = allMistakes
     .slice(0, target)
     .map((m) => m.question_id);
@@ -294,7 +308,7 @@ export async function pickMistakesQuestions(
     { minPer: 0, alpha: 1.75 },
   );
 
-  const excludeIds = new Set<string>(mistakeQs.map((q) => q.id));
+  const excludeIds = withBlockedExcluded(mistakeQs.map((q) => q.id));
   const recent = await fetchRecentQuestionIds(supabase, userId);
   for (const id of recent) excludeIds.add(id);
 
@@ -341,7 +355,7 @@ export async function pickMistakesQuestions(
       .is("parent_question_id", null)
       .eq("is_ai_generated", false)
       .limit(stillNeed * 6);
-    const extraFiltered = ((extra ?? []) as QuestionRow[]).filter(
+    const extraFiltered = rejectBlockedQuestions(extra as QuestionRow[]).filter(
       (q) => !excludeIds.has(q.id),
     );
     filler.push(...shuffle(extraFiltered).slice(0, stillNeed));

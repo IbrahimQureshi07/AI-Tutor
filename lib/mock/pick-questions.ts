@@ -3,6 +3,10 @@ import { SECTIONS, type SectionCode } from "@/lib/constants";
 import type { QuestionRow } from "@/lib/supabase/types";
 import { shuffle } from "@/lib/utils";
 import { allocateSectionCounts } from "@/lib/practice/pick-questions";
+import {
+  rejectBlockedQuestions,
+  withBlockedExcluded,
+} from "@/lib/questions/blocked-ids";
 
 /**
  * SC salesperson exam: 120 scored items, 80 National (A1–A6) + 40 State (B1–B6).
@@ -213,7 +217,7 @@ async function fetchLevel(
     .is("parent_question_id", null)
     .eq("is_ai_generated", false)
     .limit(Math.max(need * 6, 40));
-  const pool = ((data ?? []) as QuestionRow[]).filter(
+  const pool = rejectBlockedQuestions(data as QuestionRow[]).filter(
     (q) => !excludeIds.has(q.id),
   );
   return shuffle(pool).slice(0, need);
@@ -234,7 +238,7 @@ async function fetchSectionFallback(
     .is("parent_question_id", null)
     .eq("is_ai_generated", false)
     .limit(200);
-  const pool = ((data ?? []) as QuestionRow[]).filter(
+  const pool = rejectBlockedQuestions(data as QuestionRow[]).filter(
     (q) => !excludeIds.has(q.id),
   );
   return shuffle(pool).slice(0, need);
@@ -363,7 +367,9 @@ export async function pickMockQuestions(
     { minPer: stFloor, alpha: 1.5 },
   );
 
-  const excludeIds = await fetchRecentQuestionIds(supabase, userId);
+  const excludeIds = withBlockedExcluded(
+    await fetchRecentQuestionIds(supabase, userId),
+  );
 
   const picked: QuestionRow[] = [];
   for (const code of nationalCodes) {
@@ -386,7 +392,7 @@ export async function pickMockQuestions(
       .is("parent_question_id", null)
       .eq("is_ai_generated", false)
       .limit(stillNeed * 6);
-    const extra = ((data ?? []) as QuestionRow[]).filter(
+    const extra = rejectBlockedQuestions(data as QuestionRow[]).filter(
       (q) => !excludeIds.has(q.id),
     );
     picked.push(...shuffle(extra).slice(0, stillNeed));

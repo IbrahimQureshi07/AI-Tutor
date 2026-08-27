@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { QuestionRow } from "@/lib/supabase/types";
 import { shuffle } from "@/lib/utils";
+import { rejectBlockedQuestions } from "@/lib/questions/blocked-ids";
 
 /**
  * Build a balanced assessment set:
@@ -34,9 +35,11 @@ export async function pickAssessmentQuestions(
         return;
       }
 
-      const easy = shuffle(data.filter((q) => q.level === "easy")) as QuestionRow[];
-      const med = shuffle(data.filter((q) => q.level === "medium")) as QuestionRow[];
-      const hard = shuffle(data.filter((q) => q.level === "hard")) as QuestionRow[];
+      const usable = rejectBlockedQuestions(data as QuestionRow[]);
+
+      const easy = shuffle(usable.filter((q) => q.level === "easy"));
+      const med = shuffle(usable.filter((q) => q.level === "medium"));
+      const hard = shuffle(usable.filter((q) => q.level === "hard"));
 
       const picked: QuestionRow[] = [];
       picked.push(...easy.slice(0, want.easy));
@@ -46,7 +49,7 @@ export async function pickAssessmentQuestions(
       // Backfill from any remaining if a level was short
       const usedIds = new Set(picked.map((q) => q.id));
       const leftover = shuffle(
-        (data as QuestionRow[]).filter((q) => !usedIds.has(q.id)),
+        usable.filter((q) => !usedIds.has(q.id)),
       );
       while (picked.length < perSection && leftover.length) {
         picked.push(leftover.shift()!);

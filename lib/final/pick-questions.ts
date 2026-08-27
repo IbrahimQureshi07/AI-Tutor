@@ -2,6 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { SECTIONS, type SectionCode } from "@/lib/constants";
 import type { QuestionRow } from "@/lib/supabase/types";
 import { shuffle } from "@/lib/utils";
+import {
+  isQuestionBlocked,
+  rejectBlockedQuestions,
+  withBlockedExcluded,
+} from "@/lib/questions/blocked-ids";
 
 /**
  * SC PSI Salesperson exam — actual structure per the 2025 PSI bulletin and
@@ -200,10 +205,11 @@ async function fetchPastWrongsBySection(
     .eq("is_ai_generated", false);
 
   const byId = new Map<string, QuestionRow>(
-    ((data ?? []) as QuestionRow[]).map((q) => [q.id, q]),
+    rejectBlockedQuestions(data as QuestionRow[]).map((q) => [q.id, q]),
   );
 
   for (const id of ids) {
+    if (isQuestionBlocked(id)) continue;
     const q = byId.get(id);
     if (!q) continue;
     const code = q.section_code as SectionCode;
@@ -248,7 +254,7 @@ async function fetchSectionLevel(
     .is("parent_question_id", null)
     .eq("is_ai_generated", false)
     .limit(fetchLimit);
-  const filtered = ((data ?? []) as QuestionRow[]).filter(
+  const filtered = rejectBlockedQuestions(data as QuestionRow[]).filter(
     (q) => !exclude.has(q.id),
   );
   return shuffle(filtered).slice(0, need);
@@ -270,7 +276,7 @@ async function fetchSectionAny(
     .is("parent_question_id", null)
     .eq("is_ai_generated", false)
     .limit(Math.max(need * 4, 200));
-  const filtered = ((data ?? []) as QuestionRow[]).filter(
+  const filtered = rejectBlockedQuestions(data as QuestionRow[]).filter(
     (q) => !exclude.has(q.id),
   );
   return shuffle(filtered).slice(0, need);
@@ -404,7 +410,9 @@ export async function pickFinalQuestions(
     ? "final_holdout"
     : "standard";
 
-  const exclude = await fetchUserSeenQuestionIds(supabase, userId);
+  const exclude = withBlockedExcluded(
+    await fetchUserSeenQuestionIds(supabase, userId),
+  );
   const usedThisRun = new Set<string>();
   const pastWrongsBySection = await fetchPastWrongsBySection(supabase, userId);
 
@@ -500,7 +508,9 @@ export async function getFinalPoolStatus(
   const pool: "final_holdout" | "standard" = useHoldout
     ? "final_holdout"
     : "standard";
-  const seen = await fetchUserSeenQuestionIds(supabase, userId);
+  const seen = withBlockedExcluded(
+    await fetchUserSeenQuestionIds(supabase, userId),
+  );
   const pastWrongsBySection = await fetchPastWrongsBySection(supabase, userId);
 
   const nationalAlloc = largestRemainder(FINAL_NATIONAL_TOTAL, NATIONAL_CODES);

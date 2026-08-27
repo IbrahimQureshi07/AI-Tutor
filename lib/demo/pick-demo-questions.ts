@@ -3,6 +3,7 @@ import { SECTIONS } from "@/lib/constants";
 import type { QuestionRow } from "@/lib/supabase/types";
 import { shuffle } from "@/lib/utils";
 import { DEMO_QUESTION_COUNT } from "@/lib/demo/constants";
+import { rejectBlockedQuestions } from "@/lib/questions/blocked-ids";
 
 const SELECT =
   "id, section_code, topic_id, concept_id, level, prompt, option_a, option_b, option_c, option_d, correct_option, hint, explanation, source";
@@ -23,8 +24,13 @@ export async function pickDemoQuestions(
     throw new Error(error?.message ?? "No questions available for demo");
   }
 
+  const usable = rejectBlockedQuestions(data as QuestionRow[]);
+  if (!usable.length) {
+    throw new Error("No questions available for demo");
+  }
+
   const bySection = new Map<string, QuestionRow[]>();
-  for (const row of data as QuestionRow[]) {
+  for (const row of usable) {
     const list = bySection.get(row.section_code) ?? [];
     list.push(row);
     bySection.set(row.section_code, list);
@@ -42,7 +48,7 @@ export async function pickDemoQuestions(
 
   if (picked.length < count) {
     const used = new Set(picked.map((q) => q.id));
-    const rest = shuffle((data as QuestionRow[]).filter((q) => !used.has(q.id)));
+    const rest = shuffle(usable.filter((q) => !used.has(q.id)));
     for (const q of rest) {
       if (picked.length >= count) break;
       picked.push(q);

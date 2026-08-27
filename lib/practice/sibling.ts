@@ -5,6 +5,10 @@ import { getModel } from "@/lib/ai/provider";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { QuestionRow } from "@/lib/supabase/types";
 import { shuffle } from "@/lib/utils";
+import {
+  rejectBlockedQuestions,
+  withBlockedExcluded,
+} from "@/lib/questions/blocked-ids";
 
 const SIBLING_SYSTEM_BASE = `You are an expert South Carolina real estate exam writer.
 The student just missed a question on a specific concept. Write ONE new
@@ -87,6 +91,8 @@ async function pickBankSibling(
   excludeIds: Set<string>,
   targetLevel: "easy" | "medium" | "hard",
 ): Promise<QuestionRow | null> {
+  const blockedOut = withBlockedExcluded(excludeIds);
+
   const { data: sameConcept } = await supabase
     .from("questions")
     .select("*")
@@ -98,8 +104,8 @@ async function pickBankSibling(
     .eq("is_ai_generated", false)
     .limit(50);
 
-  let pool = (sameConcept ?? []) as QuestionRow[];
-  pool = pool.filter((q) => !excludeIds.has(q.id));
+  let pool = rejectBlockedQuestions(sameConcept as QuestionRow[]);
+  pool = pool.filter((q) => !blockedOut.has(q.id));
 
   if (pool.length === 0) {
     const { data: sameLevel } = await supabase
@@ -111,8 +117,8 @@ async function pickBankSibling(
       .neq("id", parent.id)
       .eq("is_ai_generated", false)
       .limit(60);
-    pool = ((sameLevel ?? []) as QuestionRow[]).filter(
-      (q) => !excludeIds.has(q.id),
+    pool = rejectBlockedQuestions(sameLevel as QuestionRow[]).filter(
+      (q) => !blockedOut.has(q.id),
     );
   }
 
@@ -125,8 +131,8 @@ async function pickBankSibling(
       .neq("id", parent.id)
       .eq("is_ai_generated", false)
       .limit(60);
-    pool = ((sameSection ?? []) as QuestionRow[]).filter(
-      (q) => !excludeIds.has(q.id),
+    pool = rejectBlockedQuestions(sameSection as QuestionRow[]).filter(
+      (q) => !blockedOut.has(q.id),
     );
   }
 

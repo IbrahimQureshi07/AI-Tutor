@@ -13,12 +13,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Sparkles, Send, X, Loader2, BookOpen } from "lucide-react";
+import { Send, X, Loader2, BookOpen } from "lucide-react";
 import type { ChatQuestionContext } from "./chat-sheet-provider";
 import { ChatMarkdown } from "./chat-markdown";
 import { VoiceInputButton } from "./voice-input-button";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatSectionDisplayLabel } from "@/lib/sections/display-label";
+import { BrandLogo } from "@/components/brand/brand-logo";
+import { BRAND } from "@/lib/brand";
 
 /** Auto-sent when Ask AI opens with a question — guides without asking for a letter. */
 const COACH_PROMPT =
@@ -100,13 +102,13 @@ export function ChatSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="p-0 flex flex-col">
         <SheetHeader className="flex flex-row items-center justify-between gap-3 border-b border-border pb-4">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-full bg-primary/15 grid place-items-center">
-              <Sparkles className="h-4 w-4 text-primary" />
-            </div>
-            <div>
-              <SheetTitle>AI Tutor</SheetTitle>
-              <SheetDescription>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <BrandLogo href={null} size="sm" showName={false} />
+            <div className="min-w-0">
+              <SheetTitle className="truncate">
+                {BRAND.shortName} {BRAND.productName}
+              </SheetTitle>
+              <SheetDescription className="truncate">
                 Ask anything about the SC real estate exam.
               </SheetDescription>
             </div>

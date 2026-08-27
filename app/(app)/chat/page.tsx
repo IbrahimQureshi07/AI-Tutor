@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, Send, Loader2 } from "lucide-react";
+import { Send, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import { VoiceInputButton } from "@/components/chat/voice-input-button";
 import { motion, AnimatePresence } from "framer-motion";
+import { BRAND } from "@/lib/brand";
+import { BrandLogo } from "@/components/brand/brand-logo";
 
 const SEEDS = [
   "What's the difference between a dual agent and a designated agent in SC?",
@@ -33,17 +35,20 @@ export default function ChatPage() {
   return (
     <div className="space-y-6">
       <div>
-        <div className="flex items-center gap-2 text-sm text-ink-muted">
-          <Sparkles className="h-3.5 w-3.5 text-primary" />
-          AI Tutor
-          <Badge variant="outline" className="ml-2">Chat</Badge>
+        <div className="flex items-center gap-2.5 text-sm text-ink-muted">
+          <BrandLogo href={null} size="sm" showName={false} />
+          <span>
+            {BRAND.shortName} {BRAND.productName}
+          </span>
+          <Badge variant="outline">Chat</Badge>
         </div>
         <h1 className="mt-2 font-serif text-4xl font-semibold tracking-tight">
           Ask anything. Anytime.
         </h1>
         <p className="mt-1 text-ink-muted max-w-xl">
-          Your 24/7 tutor. Ask about concepts, request a practice drill, or
-          get deeper explanations of any question you have attempted.
+          Your 24/7 tutor from {BRAND.shortName}. Ask about concepts, request a
+          practice drill, or get deeper explanations of any question you have
+          attempted.
         </p>
       </div>
 

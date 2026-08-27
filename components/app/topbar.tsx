@@ -20,6 +20,7 @@ import { Sparkles, LogOut, User, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useChatSheet } from "@/components/chat/chat-sheet-provider";
 import { createClient } from "@/lib/supabase/client";
+import { BrandLogo } from "@/components/brand/brand-logo";
 
 export function Topbar({
   userEmail,
@@ -51,7 +52,14 @@ export function Topbar({
   return (
     <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/60">
       <div className="h-16 px-5 md:px-8 flex items-center justify-between gap-4">
-        <div className="flex-1" />
+        <div className="flex-1 min-w-0">
+          <BrandLogo
+            href="/dashboard"
+            size="sm"
+            className="lg:hidden"
+            showName
+          />
+        </div>
         <Button
           variant="soft"
           size="sm"

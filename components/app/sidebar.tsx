@@ -67,8 +67,9 @@ export function Sidebar({ showAdmin = false }: { showAdmin?: boolean }) {
           );
         })}
       </nav>
-      <div className="p-4 border-t border-border/60 text-xs text-ink-muted">
-        {BRAND.shortName} · SC Real Estate
+      <div className="p-4 border-t border-border/60 text-xs text-ink-muted leading-snug">
+        <div className="font-medium text-ink/80">{BRAND.legalName}</div>
+        <div className="mt-0.5">{BRAND.tagline}</div>
       </div>
     </aside>
   );

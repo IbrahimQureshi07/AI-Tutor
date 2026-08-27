@@ -15,6 +15,7 @@ import {
   buildModeRunBreakdown,
   mergeJourneyScores,
 } from "@/lib/admin/headline-metrics";
+import { PDF_BRAND } from "@/lib/brand";
 
 /* ─── Brand colours (mirror final-pdf) ─── */
 const C = {
@@ -341,12 +342,12 @@ export function StudentReportPdf({
   const runBreakdown = buildModeRunBreakdown(sessions);
 
   return (
-    <Document title="Student Report Card" author="SC Real Estate Prep" subject="Student progress report">
+    <Document title="Student Report Card" author={PDF_BRAND.author} subject="Student progress report">
       <Page size="A4" style={s.page}>
         <View style={s.header}>
           <View style={s.headerTop}>
             <View>
-              <Text style={s.appName}>SC Real Estate Prep</Text>
+              <Text style={s.appName}>{PDF_BRAND.appName}</Text>
               <Text style={s.headerSubtitle}>Student Report Card</Text>
               <View style={s.reportBadge}>
                 <Text style={s.reportBadgeText}>
@@ -494,7 +495,7 @@ export function StudentReportPdf({
         </View>
 
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>SC Real Estate Prep · Student Report Card</Text>
+          <Text style={s.footerText}>{PDF_BRAND.footer("Student Report Card")}</Text>
           <Text style={s.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
       </Page>
@@ -543,7 +544,7 @@ export function StudentReportPdf({
         </View>
 
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>SC Real Estate Prep · Student Report Card</Text>
+          <Text style={s.footerText}>{PDF_BRAND.footer("Student Report Card")}</Text>
           <Text style={s.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
       </Page>

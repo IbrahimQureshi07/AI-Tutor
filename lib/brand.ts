@@ -50,6 +50,16 @@ export const BRAND = {
   },
 } as const;
 
+/** Labels for @react-pdf report documents */
+export const PDF_BRAND = {
+  author: BRAND.legalName,
+  appName: BRAND.shortName,
+  tutorFeedback: `${BRAND.shortName} ${BRAND.productName} Feedback`,
+  supportLine: `Support ${BRAND.phones.support}`,
+  footer: (reportLabel: string) =>
+    `${BRAND.legalName} · ${reportLabel} · Support ${BRAND.phones.support}`,
+} as const;
+
 export type Brand = typeof BRAND;
 
 /** tel: hrefs without dots */

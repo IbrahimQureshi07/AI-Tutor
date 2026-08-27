@@ -14,6 +14,7 @@ import {
   donutShowColoredArc,
 } from "@/lib/pdf/donut-stroke";
 import { formatSectionDisplayLabel } from "@/lib/sections/display-label";
+import { PDF_BRAND } from "@/lib/brand";
 
 /* ─── Brand colours (matching app globals.css) ─── */
 const C = {
@@ -411,14 +412,14 @@ export function AssessmentPdf({
   return (
     <Document
       title="Assessment Report"
-      author="SC Real Estate Prep"
+      author={PDF_BRAND.author}
       subject="SC Real Estate Salesperson Assessment"
     >
       <Page size="A4" style={s.page} wrap>
         {/* ── HEADER ── */}
         <View style={s.header}>
           <View style={s.headerLeft}>
-            <Text style={s.appName}>SC Real Estate Prep</Text>
+            <Text style={s.appName}>{PDF_BRAND.appName}</Text>
             <Text style={s.headerSub}>Assessment Report</Text>
           </View>
           <Text style={s.headerDate}>Generated {dateStr}</Text>
@@ -658,7 +659,7 @@ export function AssessmentPdf({
           {/* ── AI TUTOR LETTER ── */}
           {tutorLetter && (
             <View wrap={false}>
-              <Text style={s.sectionTitle}>AI Tutor Feedback</Text>
+              <Text style={s.sectionTitle}>{PDF_BRAND.tutorFeedback}</Text>
               <View style={s.tutorBox}>
                 <Text style={s.tutorText}>
                   {tutorLetter.replace(/[*#`]/g, "").trim()}
@@ -670,7 +671,7 @@ export function AssessmentPdf({
 
         {/* ── FOOTER ── */}
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>SC Real Estate Prep · Assessment Report</Text>
+          <Text style={s.footerText}>{PDF_BRAND.footer("Assessment Report")}</Text>
           <Text
             style={s.footerText}
             render={({ pageNumber, totalPages }) =>

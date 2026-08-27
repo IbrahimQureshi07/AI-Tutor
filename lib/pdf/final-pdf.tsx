@@ -9,6 +9,7 @@ import {
 import type { FinalReport, VerdictTier } from "@/lib/final/report";
 import type { Journey } from "@/lib/journey/load";
 import { formatSectionDisplayLabel } from "@/lib/sections/display-label";
+import { PDF_BRAND } from "@/lib/brand";
 
 /* ─── Brand colours ─── */
 const C = {
@@ -553,7 +554,7 @@ export function FinalPdf({
   return (
     <Document
       title="Final Test Report"
-      author="SC Real Estate Prep"
+      author={PDF_BRAND.author}
       subject="SC Real Estate Final Test Results"
     >
       {/* ══════════════ PAGE 1: FINAL EXAM RESULTS ══════════════ */}
@@ -562,7 +563,7 @@ export function FinalPdf({
         <View style={[s.header, { backgroundColor: headerBg }]}>
           <View style={s.headerTop}>
             <View>
-              <Text style={s.appName}>SC Real Estate Prep</Text>
+              <Text style={s.appName}>{PDF_BRAND.appName}</Text>
               <Text style={s.headerSubtitle}>Final Test · Official Format Simulation</Text>
               <View style={s.reportBadge}>
                 <Text style={s.reportBadgeText}>
@@ -779,7 +780,7 @@ export function FinalPdf({
 
         {/* Footer */}
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>SC Real Estate Prep · Final Test Report</Text>
+          <Text style={s.footerText}>{PDF_BRAND.footer("Final Test Report")}</Text>
           <Text style={s.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
       </Page>
@@ -790,7 +791,7 @@ export function FinalPdf({
         <View style={[s.header, { backgroundColor: "#3B3530" }]}>
           <View style={s.headerTop}>
             <View>
-              <Text style={s.appName}>SC Real Estate Prep</Text>
+              <Text style={s.appName}>{PDF_BRAND.appName}</Text>
               <Text style={s.headerSubtitle}>Overall Journey Analytics</Text>
               <View style={s.reportBadge}>
                 <Text style={s.reportBadgeText}>All Stages · Combined History</Text>
@@ -983,7 +984,7 @@ export function FinalPdf({
 
         {/* Footer */}
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>SC Real Estate Prep · Final Test Report</Text>
+          <Text style={s.footerText}>{PDF_BRAND.footer("Final Test Report")}</Text>
           <Text style={s.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
       </Page>

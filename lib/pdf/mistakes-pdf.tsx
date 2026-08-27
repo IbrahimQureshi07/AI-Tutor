@@ -14,6 +14,7 @@ import {
   donutShowColoredArc,
 } from "@/lib/pdf/donut-stroke";
 import { formatSectionDisplayLabel } from "@/lib/sections/display-label";
+import { PDF_BRAND } from "@/lib/brand";
 
 /* ─── Brand colours ─── */
 const C = {
@@ -347,7 +348,7 @@ export function MistakesPdf({
   return (
     <Document
       title="Mistakes Drill Report"
-      author="SC Real Estate Prep"
+      author={PDF_BRAND.author}
       subject="SC Real Estate Mistakes Drill Results"
     >
       <Page size="A4" style={s.page}>
@@ -356,7 +357,7 @@ export function MistakesPdf({
         <View style={s.header}>
           <View style={s.headerTop}>
             <View>
-              <Text style={s.appName}>SC Real Estate Prep</Text>
+              <Text style={s.appName}>{PDF_BRAND.appName}</Text>
               <View style={s.reportBadge}>
                 <Text style={s.reportBadgeText}>Mistakes Drill Report</Text>
               </View>
@@ -557,7 +558,7 @@ export function MistakesPdf({
           {/* ── AI NOTE ── */}
           {aiNote && aiNote.length > 10 && (
             <View wrap={false}>
-              <Text style={s.sectionTitle}>AI Tutor Feedback</Text>
+              <Text style={s.sectionTitle}>{PDF_BRAND.tutorFeedback}</Text>
               <View style={s.aiNoteBox}>
                 <Text style={s.aiNoteText}>{aiNote.replace(/[*#`]/g, "").trim()}</Text>
               </View>
@@ -568,7 +569,7 @@ export function MistakesPdf({
 
         {/* ── FOOTER ── */}
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>SC Real Estate Prep · Mistakes Drill Report</Text>
+          <Text style={s.footerText}>{PDF_BRAND.footer("Mistakes Drill Report")}</Text>
           <Text style={s.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
       </Page>

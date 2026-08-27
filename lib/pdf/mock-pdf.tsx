@@ -13,6 +13,7 @@ import type {
   Calibration,
 } from "@/components/mock/mock-report";
 import { formatSectionDisplayLabel } from "@/lib/sections/display-label";
+import { PDF_BRAND } from "@/lib/brand";
 
 /* ─── Brand colours ─── */
 const C = {
@@ -415,7 +416,7 @@ export function MockPdf({
   return (
     <Document
       title="Mock Exam Report"
-      author="SC Real Estate Prep"
+      author={PDF_BRAND.author}
       subject="SC Real Estate Mock Exam Results"
     >
       <Page size="A4" style={s.page}>
@@ -424,7 +425,7 @@ export function MockPdf({
         <View style={[s.header, { backgroundColor: headerBg }]}>
           <View style={s.headerTop}>
             <View>
-              <Text style={s.appName}>SC Real Estate Prep</Text>
+              <Text style={s.appName}>{PDF_BRAND.appName}</Text>
               <View style={s.reportBadge}>
                 <Text style={s.reportBadgeText}>
                   Mock Exam Report · {length === "smoke" ? "Smoke Test" : "Full Exam"}
@@ -678,7 +679,7 @@ export function MockPdf({
           {/* ── AI NOTE ── */}
           {aiNote && aiNote.length > 10 && (
             <View wrap={false}>
-              <Text style={s.sectionTitle}>AI Tutor Feedback</Text>
+              <Text style={s.sectionTitle}>{PDF_BRAND.tutorFeedback}</Text>
               <View style={s.aiNoteBox}>
                 <Text style={s.aiNoteText}>{aiNote.replace(/[*#`]/g, "").trim()}</Text>
               </View>
@@ -689,7 +690,7 @@ export function MockPdf({
 
         {/* ── FOOTER ── */}
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>SC Real Estate Prep · Mock Exam Report</Text>
+          <Text style={s.footerText}>{PDF_BRAND.footer("Mock Exam Report")}</Text>
           <Text style={s.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
       </Page>

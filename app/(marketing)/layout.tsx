@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { BrandLogo } from "@/components/brand/brand-logo";
+import { MarketingFooter } from "@/components/brand/marketing-footer";
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -29,20 +30,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
         </div>
       </header>
       {children}
-      <footer className="border-t border-border/60 mt-24">
-        <div className="container py-10 text-sm text-ink-muted flex flex-col md:flex-row justify-between gap-4">
-          <p>© {new Date().getFullYear()} Tutor.sc — South Carolina real estate prep.</p>
-          <div className="flex flex-wrap gap-x-6 gap-y-2">
-            <Link href="/try" className="hover:text-ink transition-colors">
-              Try free demo
-            </Link>
-            <Link href="/pricing" className="hover:text-ink transition-colors">
-              Pricing
-            </Link>
-            <p>Made for future REALTORS®.</p>
-          </div>
-        </div>
-      </footer>
+      <MarketingFooter />
     </div>
   );
 }

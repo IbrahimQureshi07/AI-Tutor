@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowRight, Sparkles, Target, Brain, Clock, Trophy, MessageSquare } from "lucide-react";
 import { MODES } from "@/lib/constants";
+import { BRAND } from "@/lib/brand";
 
 export default function LandingPage() {
   return (
@@ -14,7 +15,7 @@ export default function LandingPage() {
           <div className="max-w-3xl">
             <Badge variant="outline" className="mb-6 border-primary/30 bg-surface/60 backdrop-blur">
               <Sparkles className="h-3 w-3 text-primary" />
-              AI-powered. Built for SC.
+              {BRAND.shortName} · {BRAND.tagline}
             </Badge>
             <h1 className="font-serif text-5xl md:text-7xl font-semibold tracking-tight text-ink leading-[1.05]">
               Pass the South Carolina real estate exam.{" "}
@@ -22,8 +23,8 @@ export default function LandingPage() {
             </h1>
             <p className="mt-6 text-lg md:text-xl text-ink-muted max-w-2xl">
               Practice with 1,200+ exam-style questions. Get instant hints and
-              Claude-powered explanations. Watch your mastery grow across every
-              section from A1 to B6.
+              AI-powered explanations from {BRAND.shortName}. Watch your mastery
+              grow across every section from A1 to B6.
             </p>
             <div className="mt-10 flex flex-col sm:flex-row gap-3">
               <Button asChild size="lg">
@@ -125,8 +126,9 @@ export default function LandingPage() {
                 <li className="flex gap-3">
                   <span className="font-serif text-primary text-xl">04</span>
                   <span>
-                    Ask the <b className="text-ink">AI tutor</b> anything — about
-                    agency law, amortization, or that one tricky question.
+                    Ask the <b className="text-ink">{BRAND.shortName} {BRAND.productName}</b>{" "}
+                  anything — about agency law, amortization, or that one tricky
+                  question.
                   </span>
                 </li>
               </ol>
@@ -134,7 +136,7 @@ export default function LandingPage() {
             <div className="relative rounded-2xl border border-border bg-elevated p-6">
               <div className="flex items-center gap-2 text-xs text-ink-muted mb-4">
                 <MessageSquare className="h-3.5 w-3.5" />
-                AI Tutor
+                {BRAND.shortName} {BRAND.productName}
               </div>
               <div className="space-y-3 text-sm">
                 <div className="rounded-xl bg-primary-soft/50 p-3 max-w-[85%]">

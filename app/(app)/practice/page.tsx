@@ -14,7 +14,9 @@ export default async function PracticeIntro() {
 
   const coverage = await getAssessmentCoverage(supabase, user.id);
 
-  if (!coverage.allCovered) {
+  // One-time unlock: once the user has ever assessed all 12 sections,
+  // Practice never re-locks (freshness is informational only).
+  if (!coverage.allCoveredEver) {
     return <PracticeLocked coverage={coverage} />;
   }
 
@@ -27,12 +29,12 @@ function PracticeLocked({
   coverage: Awaited<ReturnType<typeof getAssessmentCoverage>>;
 }) {
   const totalSections = SECTIONS.length;
-  const coveredCount = coverage.covered.length;
+  const coveredCount = coverage.coveredEver.length;
   const nextCode = coverage.nextSection;
   const nextTitle = nextCode
     ? SECTIONS.find((s) => s.code === nextCode)?.title ?? ""
     : "";
-  const missingParam = coverage.missing.join(",");
+  const missingParam = coverage.missingEver.join(",");
 
   return (
     <div className="space-y-6">
@@ -85,7 +87,7 @@ function PracticeLocked({
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {SECTIONS.map((s) => {
-              const done = coverage.covered.includes(s.code);
+              const done = coverage.coveredEver.includes(s.code);
               return (
                 <div
                   key={s.code}

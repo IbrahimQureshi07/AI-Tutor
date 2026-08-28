@@ -81,6 +81,9 @@ type Coverage = {
   covered: string[];
   missing: string[];
   allCovered: boolean;
+  coveredEver?: string[];
+  missingEver?: string[];
+  allCoveredEver?: boolean;
   nextSection: string | null;
 };
 
@@ -123,8 +126,8 @@ export function AssessmentReport({
   const continueHref = coverage.missing.length
     ? `/assessment?sections=${coverage.missing.join(",")}`
     : "/assessment";
-  const primaryCtaHref = coverage.allCovered ? "/practice" : continueHref;
-  const primaryCtaLabel = coverage.allCovered
+  const primaryCtaHref = coverage.allCoveredEver ? "/practice" : continueHref;
+  const primaryCtaLabel = coverage.allCoveredEver
     ? "Start practice"
     : nextSection
       ? `Continue: ${nextLabel}`

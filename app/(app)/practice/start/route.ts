@@ -29,13 +29,13 @@ export async function POST(req: Request) {
   }
 
   const coverage = await getAssessmentCoverage(supabase, user.id);
-  if (!coverage.allCovered) {
+  if (!coverage.allCoveredEver) {
     return NextResponse.json(
       {
-        error: `Finish the assessment first — ${coverage.missing.length} section${
-          coverage.missing.length === 1 ? "" : "s"
+        error: `Finish the assessment first — ${coverage.missingEver.length} section${
+          coverage.missingEver.length === 1 ? "" : "s"
         } still need a baseline.`,
-        missing: coverage.missing,
+        missing: coverage.missingEver,
         nextSection: coverage.nextSection,
       },
       { status: 403 },

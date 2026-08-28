@@ -413,7 +413,7 @@ function HeroSection({
             </div>
 
             <div className="flex flex-wrap gap-2 pt-1">
-              {coverage.allCovered ? (
+              {coverage.allCoveredEver ? (
                 <Button asChild size="lg" className="shadow-soft">
                   <Link href="/practice">Start practice</Link>
                 </Button>

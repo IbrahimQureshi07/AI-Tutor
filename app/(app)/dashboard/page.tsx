@@ -65,7 +65,7 @@ function getNextBestAction(
       href: "/assessment",
     };
   }
-  if (!coverage.allCovered) {
+  if (!coverage.allCoveredEver) {
     const next = coverage.nextSection;
     const nextLabel = next ? formatSectionDisplayLabel(next) : "";
     const continueHref = coverage.missing.length

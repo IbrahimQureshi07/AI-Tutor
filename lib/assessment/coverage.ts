@@ -25,6 +25,12 @@ export type AssessmentCoverage = {
   missing: SectionCode[];
   /** True only when every section is currently fresh. */
   allCovered: boolean;
+  /** Sections assessed at least once (any time). */
+  coveredEver: SectionCode[];
+  /** Sections never assessed (no finished assessment attempts ever). */
+  missingEver: SectionCode[];
+  /** True once the user has ever assessed every section at least once. */
+  allCoveredEver: boolean;
   /** First missing section in canonical order (A1 → B6), or null. */
   nextSection: SectionCode | null;
   /** Sections that *had* coverage but are now expired (subset of missing). */
@@ -42,6 +48,9 @@ export function emptyCoverage(): AssessmentCoverage {
     covered: [],
     missing: [...ALL_CODES],
     allCovered: false,
+    coveredEver: [],
+    missingEver: [...ALL_CODES],
+    allCoveredEver: false,
     nextSection: ALL_CODES[0] ?? null,
     stale: [],
     freshness: ALL_CODES.map((code) => ({
@@ -143,10 +152,16 @@ export async function getAssessmentCoverage(
     .filter((f) => !f.fresh && f.lastAssessedAt !== null)
     .map((f) => f.code);
 
+  const coveredEver = ALL_CODES.filter((code) => lastBySection.has(code));
+  const missingEver = ALL_CODES.filter((code) => !lastBySection.has(code));
+
   return {
     covered,
     missing,
     allCovered: missing.length === 0,
+    coveredEver,
+    missingEver,
+    allCoveredEver: missingEver.length === 0,
     nextSection: missing[0] ?? null,
     stale,
     freshness,

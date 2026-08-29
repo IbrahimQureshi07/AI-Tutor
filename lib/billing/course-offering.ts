@@ -12,58 +12,39 @@ export type CourseFeature = {
 
 export const COURSE_FEATURES: CourseFeature[] = [
   {
-    title: "Full exam prep path",
+    title: "Mock & Final exam sims",
     description:
-      "Assessment, Practice, Mistakes review, Mock exam, and Final test — structured like real SC prep.",
+      "Timed mock exams plus a final readiness test with scored results and report cards.",
   },
   {
-    title: "Complete question bank",
+    title: "Score + readiness reports",
     description:
-      "Exam-style items across all National (A1–A6) and South Carolina State (B1–B6) sections.",
+      "Download PDFs for exam sessions and share results with your broker or study partner.",
   },
   {
-    title: "AI tutor chat",
-    description: `Get hints and explanations from ${BRAND.shortName} ${BRAND.productName} on practice and assessment questions — available whenever you study.`,
+    title: "Keep your free modes",
+    description:
+      "Assessment, Practice, and Mistakes stay available — upgrading just unlocks the two exam-shaped modes.",
   },
   {
-    title: "Mastery & readiness tracking",
+    title: "One-time upgrade",
     description:
-      "Section-by-section accuracy, strengths, weaknesses, and a composite readiness estimate.",
-  },
-  {
-    title: "Mistake resurfacing",
-    description:
-      "Missed questions come back until you lock them in — focused review, not random drills.",
-  },
-  {
-    title: "Mock & final simulations",
-    description:
-      "Timed mock exams and a final readiness test with scored results and PDF report cards.",
-  },
-  {
-    title: "Progress reports (PDF)",
-    description:
-      "Download session and progress reports to share with your broker or study partner.",
-  },
-  {
-    title: "One-time access",
-    description:
-      "Pay once and use the full course through your exam date — no recurring subscription required.",
+      "Pay once to unlock Mock + Final — no recurring subscription required.",
   },
 ];
 
 export const PRICING_FAQ: { q: string; a: string }[] = [
   {
     q: "Is this a subscription?",
-    a: "No. This is a one-time course purchase. You pay once for full access to every study mode.",
+    a: "No. This is a one-time upgrade. You pay once to unlock Mock Exam and Final Test.",
   },
   {
-    q: "What happens after the free demo?",
-    a: "You'll create an account and unlock the full course with a one-time payment. The demo is a short preview only.",
+    q: "What can I do for free?",
+    a: "You can use Assessment, Practice, and Mistakes without paying. Mock Exam and Final Test are paid.",
   },
   {
     q: "Can I try before I pay?",
-    a: "Yes — a limited free preview (a few questions with AI chat) is available before you purchase.",
+    a: "Yes — you can run the full learning modes (Assessment, Practice, Mistakes) for free before upgrading.",
   },
   {
     q: "How do I pay?",

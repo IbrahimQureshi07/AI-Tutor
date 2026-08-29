@@ -21,7 +21,7 @@ export default async function PricingPage() {
   } = await supabase.auth.getUser();
 
   const access = user ? await getAccessState(supabase, user) : null;
-  const hasAccess = access?.hasFullAccess ?? false;
+  const hasAccess = access?.canUsePaidExams ?? false;
   const price = getCoursePriceLabel();
   const priceNum = getCoursePriceUsd();
 
@@ -33,12 +33,11 @@ export default async function PricingPage() {
           {BRAND.shortName} · One-time course access
         </Badge>
         <h1 className="font-serif text-4xl md:text-5xl font-semibold tracking-tight text-ink">
-          Unlock the full SC Real Estate prep course
+          Unlock Mock Exam &amp; Final Test
         </h1>
         <p className="mt-4 text-ink-muted text-lg leading-relaxed">
-          After your free preview, purchase once from {BRAND.shortName} to access
-          every study mode, the full question bank, {BRAND.productName} chat, mock
-          exams, and progress reports.
+          Assessment, Practice, and Mistakes are free. Upgrade once from {BRAND.shortName} to
+          unlock the two exam-shaped modes: Mock Exam and Final Test — plus their report cards.
         </p>
       </div>
 
@@ -47,7 +46,7 @@ export default async function PricingPage() {
           <div className="font-serif text-5xl md:text-6xl font-semibold text-ink tabular-nums">
             {price}
           </div>
-          <p className="text-sm text-ink-muted mt-2">One-time payment · full course access</p>
+          <p className="text-sm text-ink-muted mt-2">One-time payment · unlock Mock + Final</p>
           <p className="text-xs text-ink-muted mt-3 max-w-md mx-auto">{COURSE_PRICE_NOTE}</p>
         </div>
         <CardContent className="p-6 md:p-8">

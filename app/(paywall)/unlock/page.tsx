@@ -18,15 +18,15 @@ import { BRAND } from "@/lib/brand";
 
 function statusMessage(status: string, migrationApplied: boolean): string {
   if (!migrationApplied) {
-    return `Complete your one-time purchase to unlock Assessment, Practice, Mock exams, ${BRAND.productName} chat, and progress reports.`;
+    return `Upgrade once to unlock Mock Exam and Final Test. Assessment, Practice, and Mistakes are free.`;
   }
   if (status === "demo_completed") {
-    return "You've used the free preview. Unlock the full course to continue studying with every mode and the complete question bank.";
+    return "Upgrade to unlock Mock Exam and Final Test. Your free study modes remain available.";
   }
   if (status === "expired") {
-    return "Your course access has expired. Purchase again to continue using the app.";
+    return "Your paid exam access has expired. Upgrade again to unlock Mock Exam and Final Test.";
   }
-  return "Your account is ready — unlock the full course with a one-time payment to start studying.";
+  return "Upgrade once to unlock Mock Exam and Final Test.";
 }
 
 export default async function UnlockPage() {
@@ -38,7 +38,7 @@ export default async function UnlockPage() {
   if (!user) redirect("/login?redirectTo=/unlock");
 
   const access = await getAccessState(supabase, user);
-  if (access.hasFullAccess) redirect("/dashboard");
+  if (access.canUsePaidExams) redirect("/dashboard");
 
   const price = getCoursePriceLabel();
   const priceNum = getCoursePriceUsd();
@@ -53,10 +53,10 @@ export default async function UnlockPage() {
       <div className="text-center mb-10">
         <Badge variant="outline" className="mb-4 border-warn/40 text-warn bg-warn/5">
           <Lock className="h-3 w-3 mr-1" />
-          Course access required
+          Mock &amp; Final access required
         </Badge>
         <h1 className="font-serif text-3xl md:text-4xl font-semibold tracking-tight text-ink">
-          Unlock the full {BRAND.shortName} prep course
+          Unlock Mock Exam &amp; Final Test
         </h1>
         <p className="mt-4 text-ink-muted leading-relaxed max-w-xl mx-auto">
           {headline}
@@ -68,7 +68,7 @@ export default async function UnlockPage() {
           <div className="font-serif text-5xl font-semibold text-ink tabular-nums">
             {price}
           </div>
-          <p className="text-sm text-ink-muted mt-2">One-time payment · full access</p>
+          <p className="text-sm text-ink-muted mt-2">One-time payment · unlock Mock + Final</p>
         </div>
         <CardContent className="p-6 space-y-4">
           <PricingCheckoutButton priceUsd={priceNum} />

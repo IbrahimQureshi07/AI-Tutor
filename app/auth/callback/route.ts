@@ -23,14 +23,19 @@ export async function GET(request: Request) {
         await maybeBootstrapAdmin(supabase, user);
         const access = await getAccessState(supabase, user);
         let next = nextParam;
-        if (!access.hasFullAccess && (next === "/dashboard" || next === "/")) {
+        // Deactivated / blocked: route to unlock (support / admin).
+        if (!access.canUseFreeModes && (next === "/dashboard" || next === "/")) {
           next = "/unlock";
         }
-        if (access.hasFullAccess && next === "/unlock") {
+        // Paid/grandfathered users don't need /unlock.
+        if (access.canUsePaidExams && next === "/unlock") {
           next = "/dashboard";
         }
         const res = NextResponse.redirect(`${origin}${next}`);
-        writeAccessGate(res, access.hasFullAccess ? "ok" : "lock");
+        writeAccessGate(
+          res,
+          !access.canUseFreeModes ? "lock" : access.canUsePaidExams ? "ok" : "free",
+        );
         writeBootstrapDone(res);
         return res;
       }

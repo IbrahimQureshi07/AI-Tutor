@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Lock, ArrowRight, Calendar } from "lucide-react";
+import { getAccessState, getCoursePriceLabel } from "@/lib/access/check-access";
 import { getFinalGateStatus } from "@/lib/final/completion";
 import { getFinalPoolStatus } from "@/lib/final/pick-questions";
 import { FinalStartPicker } from "@/components/final/final-start-picker";
@@ -12,6 +13,48 @@ export default async function FinalTestIntro() {
   const { supabase, user } = await requireAppUser();
   const shell = await getAppShell();
   const isAdmin = shell?.showAdmin ?? false;
+
+  const access = await getAccessState(supabase, user);
+  if (!access.canUsePaidExams) {
+    const price = getCoursePriceLabel();
+    return (
+      <div className="space-y-6">
+        <section className="relative overflow-hidden rounded-3xl border border-border bg-surface p-8 md:p-12 shadow-soft">
+          <div className="absolute inset-0 mesh-gradient opacity-30" aria-hidden />
+          <div className="relative">
+            <div className="flex items-center gap-2">
+              <div className="h-10 w-10 rounded-2xl bg-muted grid place-items-center">
+                <Lock className="h-5 w-5 text-ink-muted" />
+              </div>
+              <Badge variant="outline">Final Test is locked</Badge>
+            </div>
+            <h1 className="mt-5 font-serif text-4xl md:text-5xl font-semibold tracking-tight">
+              Final Test is part of the paid course.
+            </h1>
+            <p className="mt-3 text-lg text-ink-muted max-w-2xl">
+              Assessment, Practice, and Mistakes are free. Unlock Mock + Final for{" "}
+              <span className="font-medium text-ink">{price}</span> to run a true exam simulation.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Button asChild size="lg">
+                <Link href="/unlock">
+                  Unlock Mock &amp; Final
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="outline">
+                <Link href="/pricing">View pricing</Link>
+              </Button>
+              <Button asChild size="lg" variant="outline">
+                <Link href="/dashboard">Dashboard</Link>
+              </Button>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   const [gate, pool] = await Promise.all([
     getFinalGateStatus(supabase, user.id, isAdmin),
     getFinalPoolStatus(supabase, user.id),

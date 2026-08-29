@@ -8,6 +8,8 @@ export type AccessProfile = {
   access_status: AccessStatus | null;
   paid_at: string | null;
   payment_provider: PaymentProvider | null;
+  /** Exists in 0001_init.sql — used to grandfather pre-cutover accounts. */
+  created_at: string | null;
 };
 
 export type AccessState = {
@@ -20,4 +22,10 @@ export type AccessState = {
   needsPaywall: boolean;
   paidAt: string | null;
   paymentProvider: PaymentProvider | null;
+  /** True if the account was created before the freemium cutover. */
+  grandfathered: boolean;
+  /** Allowed modes for any logged-in user (assessment/practice/mistakes/etc.). */
+  canUseFreeModes: boolean;
+  /** Allowed paid exam modes (mock/final). */
+  canUsePaidExams: boolean;
 };

@@ -25,8 +25,23 @@ const PUBLIC_PATHS = [
   "/forgot-password",
 ];
 
-/** Logged-in users without paid access may visit these routes. */
+/** Logged-in users without paid exam access may visit these routes. */
 const PAYWALL_EXEMPT_PREFIXES = ["/unlock", "/pricing", "/settings", "/admin"];
+
+const PAID_EXAM_PREFIXES = ["/mock-exam", "/final-test"] as const;
+
+function isPaidExamPath(pathname: string): boolean {
+  return PAID_EXAM_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+}
+
+function paidExamBase(pathname: string): "/mock-exam" | "/final-test" | null {
+  for (const p of PAID_EXAM_PREFIXES) {
+    if (pathname === p || pathname.startsWith(`${p}/`)) return p;
+  }
+  return null;
+}
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some(
@@ -94,6 +109,19 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
+  // Free session, gate still warm: allow the app, but keep paid exams locked.
+  if (gate === "free") {
+    if (pathname === "/login" || pathname === "/signup") {
+      return redirectTo(request, "/dashboard", "free", bootDone);
+    }
+    const base = paidExamBase(pathname);
+    if (base && pathname !== base) {
+      // Prevent direct deep-linking into paid exam sessions/results/start routes.
+      return redirectTo(request, base, "free", bootDone);
+    }
+    return NextResponse.next({ request });
+  }
+
   // Locked session, gate still warm: skip getUser + getAccessState.
   if (gate === "lock") {
     if (pathname === "/login" || pathname === "/signup") {
@@ -153,29 +181,53 @@ export async function middleware(request: NextRequest) {
 
   if (pathname === "/unlock") {
     const access = await getAccessState(supabase, user);
-    if (access.hasFullAccess) {
+    if (!access.canUseFreeModes) {
+      writeAccessGate(response, "lock");
+      return response;
+    }
+    if (access.canUsePaidExams) {
       return redirectTo(request, "/dashboard", "ok", didBootstrap);
     }
-    writeAccessGate(response, "lock");
+    writeAccessGate(response, "free");
     return response;
   }
 
   if (pathname === "/login" || pathname === "/signup") {
     const access = await getAccessState(supabase, user);
+    if (!access.canUseFreeModes) {
+      return redirectTo(
+        request,
+        "/unlock",
+        "lock",
+        didBootstrap || isBootstrapAdminEmail(user.email),
+      );
+    }
     return redirectTo(
       request,
-      access.hasFullAccess ? "/dashboard" : "/unlock",
-      access.hasFullAccess ? "ok" : "lock",
+      "/dashboard",
+      access.canUsePaidExams ? "ok" : "free",
       didBootstrap || isBootstrapAdminEmail(user.email),
     );
   }
 
-  if (!isPublic && !isPaywallExempt(pathname) && !pathname.startsWith("/_next")) {
+  if (!isPublic && !pathname.startsWith("/_next")) {
     const access = await getAccessState(supabase, user);
-    if (access.migrationApplied && access.needsPaywall) {
+    if (!access.canUseFreeModes) {
       return redirectTo(request, "/unlock", "lock", didBootstrap);
     }
-    writeAccessGate(response, "ok");
+
+    // Paid exam routes are visible, but gated: free users see a lock screen.
+    if (isPaidExamPath(pathname) && !access.canUsePaidExams) {
+      const base = paidExamBase(pathname);
+      if (base && pathname !== base) {
+        return redirectTo(request, base, "free", didBootstrap);
+      }
+      writeAccessGate(response, "free");
+      return response;
+    }
+
+    // Everything else is allowed under free mode.
+    writeAccessGate(response, access.canUsePaidExams ? "ok" : "free");
   }
 
   return response;

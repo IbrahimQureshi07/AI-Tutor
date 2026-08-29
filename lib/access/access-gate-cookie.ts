@@ -6,7 +6,13 @@ export const ACCESS_GATE_COOKIE = "fa_access_gate";
 /** Bootstrap-admin one-shot flag (avoid maybeBootstrapAdmin every request). */
 export const BOOTSTRAP_DONE_COOKIE = "fa_boot_done";
 
-export type AccessGateValue = "ok" | "lock";
+/**
+ * Access gate for middleware short-circuiting:
+ * - ok: paid (or otherwise allowed) for paid exams
+ * - free: allowed in free modes, but paid exams are locked
+ * - lock: account blocked (e.g. deactivated) → redirect to /unlock
+ */
+export type AccessGateValue = "ok" | "free" | "lock";
 
 const GATE_MAX_AGE_SEC = 90;
 
@@ -26,7 +32,7 @@ export function hasSupabaseAuthCookie(request: NextRequest): boolean {
 
 export function readAccessGate(request: NextRequest): AccessGateValue | null {
   const v = request.cookies.get(ACCESS_GATE_COOKIE)?.value;
-  if (v === "ok" || v === "lock") return v;
+  if (v === "ok" || v === "free" || v === "lock") return v;
   return null;
 }
 

@@ -45,6 +45,21 @@ function normalizePaymentProvider(value: unknown): PaymentProvider | null {
   return null;
 }
 
+function getFreemiumCutoverMs(): number | null {
+  const raw = process.env.FREEMIUM_CUTOVER_ISO?.trim();
+  if (!raw) return null;
+  const ms = new Date(raw).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function isGrandfathered(profile: AccessProfile | null): boolean {
+  const cutover = getFreemiumCutoverMs();
+  if (!cutover || !profile?.created_at) return false;
+  const createdMs = new Date(profile.created_at).getTime();
+  if (!Number.isFinite(createdMs)) return false;
+  return createdMs < cutover;
+}
+
 /** Placeholder price until client confirms; override via env. */
 export function getCoursePriceUsd(): number {
   const raw = process.env.NEXT_PUBLIC_COURSE_PRICE;
@@ -69,6 +84,9 @@ export function buildLegacyFullAccessState(isAdmin: boolean): AccessState {
     needsPaywall: false,
     paidAt: null,
     paymentProvider: null,
+    grandfathered: false,
+    canUseFreeModes: true,
+    canUsePaidExams: true,
   };
 }
 
@@ -81,6 +99,8 @@ export function resolveAccessState(
     return buildLegacyFullAccessState(isAdmin);
   }
 
+  const grandfathered = !isAdmin && isGrandfathered(profile);
+
   if (profile?.is_active === false && !isAdmin) {
     return {
       migrationApplied: true,
@@ -90,6 +110,9 @@ export function resolveAccessState(
       needsPaywall: true,
       paidAt: profile.paid_at ?? null,
       paymentProvider: normalizePaymentProvider(profile.payment_provider),
+      grandfathered: false,
+      canUseFreeModes: false,
+      canUsePaidExams: false,
     };
   }
 
@@ -102,11 +125,15 @@ export function resolveAccessState(
       needsPaywall: false,
       paidAt: profile?.paid_at ?? null,
       paymentProvider: normalizePaymentProvider(profile?.payment_provider),
+      grandfathered: false,
+      canUseFreeModes: true,
+      canUsePaidExams: true,
     };
   }
 
   const status = normalizeAccessStatus(profile?.access_status);
   const hasFullAccess = status === "active";
+  const canUsePaidExams = hasFullAccess || grandfathered;
 
   return {
     migrationApplied: true,
@@ -116,6 +143,9 @@ export function resolveAccessState(
     needsPaywall: !hasFullAccess,
     paidAt: profile?.paid_at ?? null,
     paymentProvider: normalizePaymentProvider(profile?.payment_provider),
+    grandfathered,
+    canUseFreeModes: true,
+    canUsePaidExams,
   };
 }
 
@@ -130,7 +160,7 @@ export async function loadAccessProfile(
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "role, is_active, access_status, paid_at, payment_provider",
+      "role, is_active, access_status, paid_at, payment_provider, created_at",
     )
     .eq("id", userId)
     .maybeSingle<AccessProfile>();

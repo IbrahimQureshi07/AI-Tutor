@@ -40,7 +40,7 @@ export function accessDeniedStreamResponse(result: DeniedAccess): Response {
 }
 
 /**
- * Server guard for paid app features and APIs.
+ * Server guard for paid exam features and APIs (Mock + Final).
  * - unauthorized: not logged in
  * - payment_required: logged in but no active course access
  *
@@ -56,7 +56,28 @@ export async function requireFullAccess(
   if (!user) return { ok: false, reason: "unauthorized" };
 
   const access = await getAccessState(supabase, user);
-  if (!access.hasFullAccess) {
+  if (!access.canUsePaidExams) {
+    return { ok: false, reason: "payment_required", access };
+  }
+
+  return { ok: true, user, access };
+}
+
+/**
+ * Server guard for free modes (Assessment / Practice / Mistakes + AI).
+ * Only blocks logged-out users and fully blocked accounts.
+ */
+export async function requireFreeAccess(
+  supabase: SupabaseClient,
+): Promise<RequireFullAccessResult> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { ok: false, reason: "unauthorized" };
+
+  const access = await getAccessState(supabase, user);
+  if (!access.canUseFreeModes) {
     return { ok: false, reason: "payment_required", access };
   }
 

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import {
   accessDeniedResponse,
-  requireFullAccess,
+  requireFreeAccess,
 } from "@/lib/access/require-access";
 import { buildSummary } from "@/lib/assessment/summary";
 import { generateTutorLetter } from "@/lib/assessment/letter";
@@ -22,9 +22,9 @@ export async function POST(
 ) {
   const { sessionId } = await params;
   const supabase = await createClient();
-  const guard = await requireFullAccess(supabase);
+  const guard = await requireFreeAccess(supabase);
   if (!guard.ok) return accessDeniedResponse(guard);
-  const { user } = guard;
+  const { user, access } = guard;
 
   const json = await request.json().catch(() => ({}));
   const parsed = Body.safeParse(json);
@@ -39,6 +39,16 @@ export async function POST(
     .single();
   if (sErr || !session)
     return NextResponse.json({ error: "session not found" }, { status: 404 });
+
+  if (
+    (session.mode === "mock" || session.mode === "final") &&
+    !access.canUsePaidExams
+  ) {
+    return NextResponse.json(
+      { error: "payment_required", unlock: "/unlock" },
+      { status: 403 },
+    );
+  }
 
   // Build summary + tutor letter for assessment v2.
   let summaryPatch: Record<string, unknown> = {};

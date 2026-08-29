@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import {
   accessDeniedResponse,
-  requireFullAccess,
+  requireFreeAccess,
 } from "@/lib/access/require-access";
 import { DebriefPlanSchema, sanitizePlan } from "@/lib/coach/debrief-plan";
 
@@ -23,9 +23,9 @@ const Body = z.object({
  */
 export async function POST(req: Request) {
   const supabase = await createClient();
-  const guard = await requireFullAccess(supabase);
+  const guard = await requireFreeAccess(supabase);
   if (!guard.ok) return accessDeniedResponse(guard);
-  const { user } = guard;
+  const { user, access } = guard;
 
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
@@ -37,13 +37,23 @@ export async function POST(req: Request) {
 
   const { data: existing } = await supabase
     .from("sessions")
-    .select("config")
+    .select("mode, config")
     .eq("id", sessionId)
     .eq("user_id", user.id)
     .maybeSingle();
 
   if (!existing) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  if (
+    (existing.mode === "mock" || existing.mode === "final") &&
+    !access.canUsePaidExams
+  ) {
+    return NextResponse.json(
+      { error: "payment_required", unlock: "/unlock" },
+      { status: 403 },
+    );
   }
 
   const config = (existing.config as Record<string, unknown> | null) ?? {};

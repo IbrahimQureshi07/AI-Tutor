@@ -7,7 +7,7 @@ import React from "react";
 import { createClient } from "@/lib/supabase/server";
 import {
   accessDeniedResponse,
-  requireFullAccess,
+  requireFreeAccess,
 } from "@/lib/access/require-access";
 import { buildPracticeStats, type PracticeAttempt } from "@/lib/practice/results";
 import { PracticePdf } from "@/lib/pdf/practice-pdf";
@@ -21,7 +21,7 @@ export async function GET(
     const { sessionId } = await params;
     const supabase = await createClient();
 
-    const guard = await requireFullAccess(supabase);
+    const guard = await requireFreeAccess(supabase);
     if (!guard.ok) return accessDeniedResponse(guard);
     const { user } = guard;
 

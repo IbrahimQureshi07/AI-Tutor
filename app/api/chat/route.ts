@@ -3,7 +3,7 @@ import { getModel, SYSTEM_PROMPT } from "@/lib/ai/provider";
 import { createClient } from "@/lib/supabase/server";
 import {
   accessDeniedStreamResponse,
-  requireFullAccess,
+  requireFreeAccess,
 } from "@/lib/access/require-access";
 
 export const runtime = "nodejs";
@@ -37,7 +37,7 @@ STYLE:
 
 export async function POST(req: Request) {
   const supabase = await createClient();
-  const guard = await requireFullAccess(supabase);
+  const guard = await requireFreeAccess(supabase);
   if (!guard.ok) return accessDeniedStreamResponse(guard);
 
   const body = await req.json();

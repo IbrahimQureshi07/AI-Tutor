@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import {
   accessDeniedResponse,
-  requireFullAccess,
+  requireFreeAccess,
 } from "@/lib/access/require-access";
 
 const Body = z.object({
@@ -27,9 +27,9 @@ const Body = z.object({
 
 export async function POST(request: Request) {
   const supabase = await createClient();
-  const guard = await requireFullAccess(supabase);
+  const guard = await requireFreeAccess(supabase);
   if (!guard.ok) return accessDeniedResponse(guard);
-  const { user } = guard;
+  const { user, access } = guard;
 
   const json = await request.json().catch(() => ({}));
   const parsed = Body.safeParse(json);
@@ -38,6 +38,17 @@ export async function POST(request: Request) {
   }
 
   const payload: Record<string, unknown> = { user_id: user.id, ...parsed.data };
+
+  // Paid-exam protection: don't allow Mock/Final attempts unless paid/grandfathered.
+  if (
+    (parsed.data.mode === "mock" || parsed.data.mode === "final") &&
+    !access.canUsePaidExams
+  ) {
+    return NextResponse.json(
+      { error: "payment_required", unlock: "/unlock" },
+      { status: 403 },
+    );
+  }
 
   let { data: inserted, error } = await supabase
     .from("attempts")
@@ -82,7 +93,7 @@ const Patch = z.object({
 
 export async function PATCH(request: Request) {
   const supabase = await createClient();
-  const guard = await requireFullAccess(supabase);
+  const guard = await requireFreeAccess(supabase);
   if (!guard.ok) return accessDeniedResponse(guard);
   const { user } = guard;
 

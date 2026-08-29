@@ -4,7 +4,7 @@ import { getModel } from "@/lib/ai/provider";
 import { createClient } from "@/lib/supabase/server";
 import {
   accessDeniedStreamResponse,
-  requireFullAccess,
+  requireFreeAccess,
 } from "@/lib/access/require-access";
 import { SECTIONS } from "@/lib/constants";
 import { DebriefPlanSchema } from "@/lib/coach/debrief-plan";
@@ -143,7 +143,7 @@ ${sectionLines || "  (none)"}
 
 export async function POST(req: Request) {
   const supabase = await createClient();
-  const guard = await requireFullAccess(supabase);
+  const guard = await requireFreeAccess(supabase);
   if (!guard.ok) return accessDeniedStreamResponse(guard);
 
   const raw = await req.json().catch(() => null);
@@ -156,6 +156,16 @@ export async function POST(req: Request) {
   }
 
   const { messages, snapshot } = parsed.data;
+  if (
+    (snapshot.mode === "mock" || snapshot.mode === "final") &&
+    !guard.access.canUsePaidExams
+  ) {
+    return accessDeniedStreamResponse({
+      ok: false,
+      reason: "payment_required",
+      access: guard.access,
+    });
+  }
   const system = buildSystem(snapshot);
 
   const result = streamText({

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import {
   accessDeniedResponse,
-  requireFullAccess,
+  requireFreeAccess,
 } from "@/lib/access/require-access";
 import { getModel } from "@/lib/ai/provider";
 
@@ -103,7 +103,7 @@ function scrub(text: string, correctLetter: string, correctText: string) {
 
 export async function POST(req: Request) {
   const supabase = await createClient();
-  const guard = await requireFullAccess(supabase);
+  const guard = await requireFreeAccess(supabase);
   if (!guard.ok) return accessDeniedResponse(guard);
 
   const json = await req.json().catch(() => ({}));

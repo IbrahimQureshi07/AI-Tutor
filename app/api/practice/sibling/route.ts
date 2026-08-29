@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import {
   accessDeniedResponse,
-  requireFullAccess,
+  requireFreeAccess,
 } from "@/lib/access/require-access";
 import { generateSiblingQuestion } from "@/lib/practice/sibling";
 import type { QuestionRow } from "@/lib/supabase/types";
@@ -20,7 +20,7 @@ const Body = z.object({
 
 export async function POST(req: Request) {
   const supabase = await createClient();
-  const guard = await requireFullAccess(supabase);
+  const guard = await requireFreeAccess(supabase);
   if (!guard.ok) return accessDeniedResponse(guard);
   const { user } = guard;
 

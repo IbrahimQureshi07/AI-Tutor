@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Download } from "lucide-react";
+import { Download, Upload } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,15 @@ import {
   buildQuestionCsvTemplate,
   QUESTION_CSV_TEMPLATE_FILENAME,
 } from "@/lib/admin/question-csv-template";
+
+type ImportPreview = {
+  commit: boolean;
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  errors: Array<{ row: number; errors: string[] }>;
+  inserted?: number;
+};
 
 type QuestionItem = {
   id: string;
@@ -49,8 +58,12 @@ export default function AdminQuestionsPage() {
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [exporting, setExporting] = React.useState(false);
+  const [importing, setImporting] = React.useState(false);
+  const [importFile, setImportFile] = React.useState<File | null>(null);
+  const [importPreview, setImportPreview] = React.useState<ImportPreview | null>(null);
   const [form, setForm] = React.useState<FormState>(EMPTY_FORM);
   const [editingId, setEditingId] = React.useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -85,6 +98,62 @@ export default function AdminQuestionsPage() {
   function resetForm() {
     setEditingId(null);
     setForm(EMPTY_FORM);
+  }
+
+  async function previewImport(file: File) {
+    setImporting(true);
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      const res = await fetch("/api/admin/questions/import", { method: "POST", body: fd });
+      const json = (await res.json().catch(() => ({}))) as Partial<ImportPreview> & {
+        error?: string;
+      };
+      if (!res.ok) {
+        toast.error(json.error ?? "Could not preview CSV.");
+        setImportPreview(null);
+        return;
+      }
+      setImportPreview({
+        commit: false,
+        totalRows: Number(json.totalRows ?? 0),
+        validRows: Number(json.validRows ?? 0),
+        invalidRows: Number(json.invalidRows ?? 0),
+        errors: Array.isArray(json.errors) ? (json.errors as ImportPreview["errors"]) : [],
+      });
+      toast.success("Preview ready.");
+    } catch {
+      toast.error("Could not preview CSV.");
+      setImportPreview(null);
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function commitImport(file: File) {
+    setImporting(true);
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      const res = await fetch("/api/admin/questions/import?commit=1", { method: "POST", body: fd });
+      const json = (await res.json().catch(() => ({}))) as Partial<ImportPreview> & {
+        error?: string;
+      };
+      if (!res.ok) {
+        toast.error(json.error ?? "Could not import CSV.");
+        return;
+      }
+      const inserted = Number(json.inserted ?? 0);
+      toast.success(inserted ? `Imported ${inserted} question(s).` : "Import complete.");
+      setImportFile(null);
+      setImportPreview(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      await load();
+    } catch {
+      toast.error("Could not import CSV.");
+    } finally {
+      setImporting(false);
+    }
   }
 
   async function saveQuestion(e: React.FormEvent) {
@@ -200,6 +269,16 @@ export default function AdminQuestionsPage() {
             type="button"
             variant="outline"
             size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+          >
+            <Upload className="h-4 w-4" />
+            Upload CSV
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
             disabled={exporting}
             onClick={() => void downloadDatasetCsv()}
           >
@@ -208,6 +287,104 @@ export default function AdminQuestionsPage() {
           </Button>
         </div>
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv,text/csv"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0] ?? null;
+          setImportFile(f);
+          setImportPreview(null);
+          if (f) void previewImport(f);
+        }}
+      />
+
+      {(importFile || importPreview) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Bulk upload</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="text-sm">
+              <span className="font-medium">File:</span>{" "}
+              <span className="text-ink-muted">{importFile?.name ?? "—"}</span>
+            </div>
+
+            {importing && <p className="text-sm text-ink-muted">Working…</p>}
+
+            {importPreview && (
+              <div className="space-y-2">
+                <p className="text-sm">
+                  <span className="font-medium">{importPreview.validRows}</span> valid row(s)
+                  {" · "}
+                  <span className={importPreview.invalidRows ? "font-medium text-danger" : "font-medium"}>
+                    {importPreview.invalidRows}
+                  </span>{" "}
+                  invalid row(s)
+                </p>
+
+                {importPreview.invalidRows > 0 && importPreview.errors.length > 0 && (
+                  <div className="rounded-lg border border-border/70 bg-elevated/20 p-3">
+                    <p className="text-xs font-medium text-ink-muted mb-2">
+                      Fix these rows and re-upload (showing up to {importPreview.errors.length}):
+                    </p>
+                    <div className="space-y-1">
+                      {importPreview.errors.slice(0, 30).map((e) => (
+                        <p key={`${e.row}-${e.errors[0]}`} className="text-xs text-ink-muted">
+                          <span className="font-medium text-ink">Row {e.row}:</span> {e.errors.join(" · ")}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    disabled={!importFile || importing}
+                    variant="outline"
+                    onClick={() => (importFile ? void previewImport(importFile) : null)}
+                  >
+                    Re-check
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={
+                      !importFile ||
+                      importing ||
+                      importPreview.invalidRows > 0 ||
+                      importPreview.validRows === 0
+                    }
+                    onClick={() => (importFile ? void commitImport(importFile) : null)}
+                  >
+                    Import valid rows
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={importing}
+                    onClick={() => {
+                      setImportFile(null);
+                      setImportPreview(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                  >
+                    Clear
+                  </Button>
+                </div>
+
+                {importPreview.invalidRows > 0 && (
+                  <p className="text-xs text-ink-muted">
+                    Import is disabled until all rows are valid.
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

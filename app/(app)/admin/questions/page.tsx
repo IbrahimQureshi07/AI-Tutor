@@ -10,6 +10,10 @@ import { Label } from "@/components/ui/label";
 import { SECTIONS } from "@/lib/constants";
 import { formatSectionDisplayLabel } from "@/lib/sections/display-label";
 import { validateQuestionForm } from "@/lib/admin/question-form-validate";
+import {
+  buildQuestionCsvTemplate,
+  QUESTION_CSV_TEMPLATE_FILENAME,
+} from "@/lib/admin/question-csv-template";
 
 type QuestionItem = {
   id: string;
@@ -157,26 +161,52 @@ export default function AdminQuestionsPage() {
     }
   }
 
+  function downloadTemplateCsv() {
+    const csv = buildQuestionCsvTemplate();
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = QUESTION_CSV_TEMPLATE_FILENAME;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast.success("Template downloaded — keep the header row, add your questions below.");
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-serif text-3xl font-semibold tracking-tight">Questions</h1>
           <p className="text-ink-muted mt-1 text-sm">
-            Create or update question bank entries. CSV export is dataset-only
-            (excludes LLM-generated follow-ups).
+            Create or update question bank entries. Download the template to
+            prepare a bulk CSV (header row once, then one question per row).
+            Dataset export excludes LLM-generated follow-ups.
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={exporting}
-          onClick={() => void downloadDatasetCsv()}
-        >
-          <Download className="h-4 w-4" />
-          {exporting ? "Preparing CSV…" : "Download dataset CSV"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={downloadTemplateCsv}
+          >
+            <Download className="h-4 w-4" />
+            Download template CSV
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={exporting}
+            onClick={() => void downloadDatasetCsv()}
+          >
+            <Download className="h-4 w-4" />
+            {exporting ? "Preparing CSV…" : "Download dataset CSV"}
+          </Button>
+        </div>
       </div>
 
       <Card>

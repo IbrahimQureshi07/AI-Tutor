@@ -7,11 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SECTIONS } from "@/lib/constants";
+import { formatSectionDisplayLabel } from "@/lib/sections/display-label";
 
 type QuestionItem = {
   id: string;
   section_code: string;
-  topic_id: string | null;
   concept_id: string | null;
   level: "easy" | "medium" | "hard";
   prompt: string;
@@ -20,17 +21,13 @@ type QuestionItem = {
   option_c: string;
   option_d: string;
   correct_option: "A" | "B" | "C" | "D";
-  hint: string | null;
   explanation: string | null;
-  source: string | null;
-  pool: "standard" | "final_holdout";
 };
 
 type FormState = Omit<QuestionItem, "id">;
 
 const EMPTY_FORM: FormState = {
   section_code: "",
-  topic_id: null,
   concept_id: null,
   level: "medium",
   prompt: "",
@@ -39,10 +36,7 @@ const EMPTY_FORM: FormState = {
   option_c: "",
   option_d: "",
   correct_option: "A",
-  hint: null,
   explanation: null,
-  source: null,
-  pool: "standard",
 };
 
 export default function AdminQuestionsPage() {
@@ -93,12 +87,16 @@ export default function AdminQuestionsPage() {
     setSaving(true);
     try {
       const body = {
-        ...form,
-        topic_id: form.topic_id || null,
+        section_code: form.section_code,
         concept_id: form.concept_id || null,
-        hint: form.hint || null,
+        level: form.level,
+        prompt: form.prompt,
+        option_a: form.option_a,
+        option_b: form.option_b,
+        option_c: form.option_c,
+        option_d: form.option_d,
+        correct_option: form.correct_option,
         explanation: form.explanation || null,
-        source: form.source || null,
       };
 
       const res = await fetch("/api/admin/questions", {
@@ -179,13 +177,22 @@ export default function AdminQuestionsPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={saveQuestion} className="grid gap-3 md:grid-cols-2">
-            <Field label="Section code">
-              <Input
+            <Field label="Topic / Section">
+              <select
                 value={form.section_code}
                 onChange={(e) => patch("section_code", e.target.value)}
-                placeholder="A1 / B3"
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                 required
-              />
+              >
+                <option value="" disabled>
+                  Select a section…
+                </option>
+                {SECTIONS.map((s) => (
+                  <option key={s.code} value={s.code}>
+                    {s.code} — {formatSectionDisplayLabel(s.code)}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="Difficulty">
               <select
@@ -198,7 +205,7 @@ export default function AdminQuestionsPage() {
                 <option value="hard">hard</option>
               </select>
             </Field>
-            <Field label="Prompt" className="md:col-span-2">
+            <Field label="Question" className="md:col-span-2">
               <Input
                 value={form.prompt}
                 onChange={(e) => patch("prompt", e.target.value)}
@@ -221,20 +228,7 @@ export default function AdminQuestionsPage() {
                 <option value="D">D</option>
               </select>
             </Field>
-            <Field label="Pool">
-              <select
-                value={form.pool}
-                onChange={(e) => patch("pool", e.target.value as FormState["pool"])}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="standard">standard</option>
-                <option value="final_holdout">final_holdout</option>
-              </select>
-            </Field>
             <Field label="Concept ID"><Input value={form.concept_id ?? ""} onChange={(e) => patch("concept_id", e.target.value || null)} /></Field>
-            <Field label="Topic ID"><Input value={form.topic_id ?? ""} onChange={(e) => patch("topic_id", e.target.value || null)} /></Field>
-            <Field label="Hint"><Input value={form.hint ?? ""} onChange={(e) => patch("hint", e.target.value || null)} /></Field>
-            <Field label="Source"><Input value={form.source ?? ""} onChange={(e) => patch("source", e.target.value || null)} /></Field>
             <Field label="Explanation" className="md:col-span-2">
               <Input value={form.explanation ?? ""} onChange={(e) => patch("explanation", e.target.value || null)} />
             </Field>
@@ -267,7 +261,7 @@ export default function AdminQuestionsPage() {
                 <div key={q.id} className="rounded-xl border border-border p-3 flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-xs text-ink-muted">
-                      {q.section_code} · {q.level} · {q.pool}
+                      {formatSectionDisplayLabel(q.section_code)} · {q.level}
                     </p>
                     <p className="text-sm text-ink line-clamp-2">{q.prompt}</p>
                   </div>

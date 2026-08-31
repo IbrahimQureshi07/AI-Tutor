@@ -6,7 +6,6 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 
 const CreateBody = z.object({
   section_code: z.string().min(1),
-  topic_id: z.string().uuid().nullable().optional(),
   concept_id: z.string().nullable().optional(),
   level: z.enum(["easy", "medium", "hard"]),
   prompt: z.string().min(8),
@@ -15,10 +14,7 @@ const CreateBody = z.object({
   option_c: z.string().min(1),
   option_d: z.string().min(1),
   correct_option: z.enum(["A", "B", "C", "D"]),
-  hint: z.string().nullable().optional(),
   explanation: z.string().nullable().optional(),
-  source: z.string().nullable().optional(),
-  pool: z.enum(["standard", "final_holdout"]).optional(),
 });
 
 const UpdateBody = CreateBody.partial().extend({
@@ -39,7 +35,7 @@ export async function GET() {
   const { data, error } = await admin
     .from("questions")
     .select(
-      "id, section_code, topic_id, concept_id, level, prompt, option_a, option_b, option_c, option_d, correct_option, hint, explanation, source, pool",
+      "id, section_code, concept_id, level, prompt, option_a, option_b, option_c, option_d, correct_option, explanation",
     )
     .order("created_at", { ascending: false })
     .limit(200);
@@ -67,13 +63,17 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const payload = {
     ...parsed.data,
-    pool: parsed.data.pool ?? "standard",
+    concept_id: parsed.data.concept_id?.trim() || null,
+    explanation: parsed.data.explanation?.trim() || null,
+    pool: "standard" as const,
+    source: "admin" as const,
+    hint: null as null,
   };
   const { data, error } = await admin
     .from("questions")
     .insert(payload)
     .select(
-      "id, section_code, topic_id, concept_id, level, prompt, option_a, option_b, option_c, option_d, correct_option, hint, explanation, source, pool",
+      "id, section_code, concept_id, level, prompt, option_a, option_b, option_c, option_d, correct_option, explanation",
     )
     .single();
   if (error) {
@@ -104,10 +104,14 @@ export async function PATCH(request: Request) {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("questions")
-    .update(rest)
+    .update({
+      ...rest,
+      concept_id: rest.concept_id?.trim() || null,
+      explanation: rest.explanation?.trim() || null,
+    })
     .eq("id", id)
     .select(
-      "id, section_code, topic_id, concept_id, level, prompt, option_a, option_b, option_c, option_d, correct_option, hint, explanation, source, pool",
+      "id, section_code, concept_id, level, prompt, option_a, option_b, option_c, option_d, correct_option, explanation",
     )
     .single();
   if (error) {

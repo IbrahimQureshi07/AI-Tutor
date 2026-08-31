@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SECTIONS } from "@/lib/constants";
 import { formatSectionDisplayLabel } from "@/lib/sections/display-label";
+import { validateQuestionForm } from "@/lib/admin/question-form-validate";
 
 type QuestionItem = {
   id: string;
@@ -84,20 +85,21 @@ export default function AdminQuestionsPage() {
 
   async function saveQuestion(e: React.FormEvent) {
     e.preventDefault();
+
+    const checked = validateQuestionForm(form);
+    if (!checked.ok) {
+      toast.error(checked.errors[0] ?? "Please fix the form errors.");
+      if (checked.errors.length > 1) {
+        toast.message(`${checked.errors.length - 1} more issue(s)`, {
+          description: checked.errors.slice(1).join(" · "),
+        });
+      }
+      return;
+    }
+
     setSaving(true);
     try {
-      const body = {
-        section_code: form.section_code,
-        concept_id: form.concept_id || null,
-        level: form.level,
-        prompt: form.prompt,
-        option_a: form.option_a,
-        option_b: form.option_b,
-        option_c: form.option_c,
-        option_d: form.option_d,
-        correct_option: form.correct_option,
-        explanation: form.explanation || null,
-      };
+      const body = checked.data;
 
       const res = await fetch("/api/admin/questions", {
         method: editingId ? "PATCH" : "POST",
@@ -106,7 +108,13 @@ export default function AdminQuestionsPage() {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(json.error ?? "Could not save question.");
+        const apiError =
+          typeof json.error === "string"
+            ? json.error
+            : Array.isArray(json.errors)
+              ? json.errors[0]
+              : "Could not save question.";
+        toast.error(apiError);
         return;
       }
       toast.success(editingId ? "Question updated." : "Question created.");
@@ -228,7 +236,13 @@ export default function AdminQuestionsPage() {
                 <option value="D">D</option>
               </select>
             </Field>
-            <Field label="Concept ID"><Input value={form.concept_id ?? ""} onChange={(e) => patch("concept_id", e.target.value || null)} /></Field>
+            <Field label="Concept (optional)">
+              <Input
+                value={form.concept_id ?? ""}
+                onChange={(e) => patch("concept_id", e.target.value || null)}
+                placeholder="e.g. A1.forms_of_ownership"
+              />
+            </Field>
             <Field label="Explanation" className="md:col-span-2">
               <Input value={form.explanation ?? ""} onChange={(e) => patch("explanation", e.target.value || null)} />
             </Field>

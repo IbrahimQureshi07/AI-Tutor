@@ -23,7 +23,17 @@ const UpdateBody = z.object({
 const SELECT =
   "id, section_code, concept_id, level, prompt, option_a, option_b, option_c, option_d, correct_option, explanation";
 
-export async function GET() {
+function clampInt(v: string | null, { min, max, fallback }: { min: number; max: number; fallback: number }) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, Math.trunc(n)));
+}
+
+function cleanSearch(q: string | null): string {
+  return (q ?? "").trim().replace(/[%_]/g, "").slice(0, 120);
+}
+
+export async function GET(request: Request) {
   const supabase = await createClient();
   const guard = await requireAdmin(supabase);
   if (!guard.ok) {
@@ -33,16 +43,40 @@ export async function GET() {
     );
   }
 
+  const url = new URL(request.url);
+  const q = cleanSearch(url.searchParams.get("q"));
+  const offset = clampInt(url.searchParams.get("offset"), { min: 0, max: 200_000, fallback: 0 });
+  const limit = clampInt(url.searchParams.get("limit"), { min: 1, max: 500, fallback: 200 });
+
   const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("questions")
-    .select(SELECT)
-    .order("created_at", { ascending: false })
-    .limit(200);
+  let query = admin.from("questions").select(SELECT).order("created_at", { ascending: false }).order("id", { ascending: false });
+
+  if (q) {
+    const maybeSection = q.toUpperCase();
+    const isSection = /^[AB][1-6]$/.test(maybeSection);
+    const like = `%${q}%`;
+    query = query.or(
+      [
+        `prompt.ilike.${like}`,
+        `concept_id.ilike.${like}`,
+        isSection ? `section_code.eq.${maybeSection}` : null,
+      ]
+        .filter(Boolean)
+        .join(","),
+    );
+  }
+
+  const { data, error } = await query.range(offset, offset + limit - 1);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ questions: data ?? [] });
+  return NextResponse.json({
+    questions: data ?? [],
+    offset,
+    limit,
+    nextOffset: offset + (data?.length ?? 0),
+    hasMore: (data?.length ?? 0) === limit,
+  });
 }
 
 export async function POST(request: Request) {

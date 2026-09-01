@@ -38,6 +38,14 @@ type QuestionItem = {
   explanation: string | null;
 };
 
+type QuestionListResponse = {
+  questions: QuestionItem[];
+  offset: number;
+  limit: number;
+  nextOffset: number;
+  hasMore: boolean;
+};
+
 type FormState = Omit<QuestionItem, "id">;
 
 const EMPTY_FORM: FormState = {
@@ -56,33 +64,66 @@ const EMPTY_FORM: FormState = {
 export default function AdminQuestionsPage() {
   const [items, setItems] = React.useState<QuestionItem[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [loadingMore, setLoadingMore] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [exporting, setExporting] = React.useState(false);
   const [importing, setImporting] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+  const [offset, setOffset] = React.useState(0);
+  const [hasMore, setHasMore] = React.useState(false);
   const [importFile, setImportFile] = React.useState<File | null>(null);
   const [importPreview, setImportPreview] = React.useState<ImportPreview | null>(null);
   const [form, setForm] = React.useState<FormState>(EMPTY_FORM);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
-  const load = React.useCallback(async () => {
+  const load = React.useCallback(async (args?: { q?: string; offset?: number; append?: boolean }) => {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/questions", { cache: "no-store" });
-      const json = await res.json().catch(() => ({}));
+      const q = args?.q ?? query;
+      const off = args?.offset ?? 0;
+      const url = new URL("/api/admin/questions", window.location.origin);
+      if (q.trim()) url.searchParams.set("q", q.trim());
+      url.searchParams.set("offset", String(off));
+      url.searchParams.set("limit", "200");
+
+      const res = await fetch(url.toString(), { cache: "no-store" });
+      const json = (await res.json().catch(() => ({}))) as Partial<QuestionListResponse> & {
+        error?: string;
+      };
       if (!res.ok) {
         toast.error(json.error ?? "Could not load questions.");
         return;
       }
-      setItems((json.questions ?? []) as QuestionItem[]);
+      const next = (json.questions ?? []) as QuestionItem[];
+      if (args?.append) {
+        setItems((prev) => [...prev, ...next]);
+      } else {
+        setItems(next);
+      }
+      setOffset(Number(json.nextOffset ?? next.length ?? 0));
+      setHasMore(Boolean(json.hasMore));
     } finally {
       setLoading(false);
     }
   }, []);
 
   React.useEffect(() => {
-    void load();
-  }, [load]);
+    const t = window.setTimeout(() => {
+      void load({ q: query, offset: 0, append: false });
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [load, query]);
+
+  async function loadMore() {
+    if (loadingMore || loading || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      await load({ q: query, offset, append: true });
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   function patch<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm((prev) => ({ ...prev, [k]: v }));
@@ -148,7 +189,7 @@ export default function AdminQuestionsPage() {
       setImportFile(null);
       setImportPreview(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
-      await load();
+      await load({ q: query, offset: 0, append: false });
     } catch {
       toast.error("Could not import CSV.");
     } finally {
@@ -192,7 +233,7 @@ export default function AdminQuestionsPage() {
       }
       toast.success(editingId ? "Question updated." : "Question created.");
       resetForm();
-      await load();
+      await load({ q: query, offset: 0, append: false });
     } finally {
       setSaving(false);
     }
@@ -388,6 +429,22 @@ export default function AdminQuestionsPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Find questions</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search question text, concept (e.g. B5.fair_housing), or section (A1/B3)…"
+          />
+          <p className="text-xs text-ink-muted">
+            Shows newest results first. Use search + “Load more” to reach any question without loading the whole bank.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>{editingId ? "Edit question" : "Add question"}</CardTitle>
         </CardHeader>
         <CardContent>
@@ -479,10 +536,14 @@ export default function AdminQuestionsPage() {
           ) : (
             <div className="space-y-2">
               {items.map((q) => (
-                <div key={q.id} className="rounded-xl border border-border p-3 flex items-start justify-between gap-3">
+                <div
+                  key={q.id}
+                  className="rounded-xl border border-border p-3 flex items-start justify-between gap-3"
+                >
                   <div className="min-w-0">
                     <p className="text-xs text-ink-muted">
                       {formatSectionDisplayLabel(q.section_code)} · {q.level}
+                      {q.concept_id ? ` · ${q.concept_id}` : ""}
                     </p>
                     <p className="text-sm text-ink line-clamp-2">{q.prompt}</p>
                   </div>
@@ -491,6 +552,14 @@ export default function AdminQuestionsPage() {
                   </Button>
                 </div>
               ))}
+
+              {hasMore && (
+                <div className="pt-2">
+                  <Button type="button" variant="outline" disabled={loadingMore} onClick={loadMore}>
+                    {loadingMore ? "Loading…" : "Load more"}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

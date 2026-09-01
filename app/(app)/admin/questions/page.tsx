@@ -429,22 +429,6 @@ export default function AdminQuestionsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Find questions</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search question text, concept (e.g. B5.fair_housing), or section (A1/B3)…"
-          />
-          <p className="text-xs text-ink-muted">
-            Shows newest results first. Use search + “Load more” to reach any question without loading the whole bank.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
           <CardTitle>{editingId ? "Edit question" : "Add question"}</CardTitle>
         </CardHeader>
         <CardContent>
@@ -521,6 +505,22 @@ export default function AdminQuestionsPage() {
               )}
             </div>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Find questions</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search question text, concept (e.g. B5.fair_housing), or section (A1/B3)…"
+          />
+          <p className="text-xs text-ink-muted">
+            Shows newest results first. Use search + “Load more” to reach any question without loading the whole bank.
+          </p>
         </CardContent>
       </Card>
 

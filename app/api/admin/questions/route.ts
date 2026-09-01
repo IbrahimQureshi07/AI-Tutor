@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { validateQuestionForm } from "@/lib/admin/question-form-validate";
+import { ensureConceptExists } from "@/lib/admin/ensure-concept";
 
 const UpdateBody = z.object({
   id: z.string().uuid(),
@@ -64,6 +65,14 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  try {
+    await ensureConceptExists(admin, checked.data.concept_id);
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Could not create concept." },
+      { status: 500 },
+    );
+  }
   const payload = {
     ...checked.data,
     pool: "standard" as const,
@@ -137,6 +146,16 @@ export async function PATCH(request: Request) {
   }
 
   const admin = createAdminClient();
+  if (typeof (updatePayload as { concept_id?: unknown }).concept_id === "string") {
+    try {
+      await ensureConceptExists(admin, (updatePayload as { concept_id?: string | null }).concept_id);
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "Could not create concept." },
+        { status: 500 },
+      );
+    }
+  }
   const { data, error } = await admin
     .from("questions")
     .update(updatePayload)

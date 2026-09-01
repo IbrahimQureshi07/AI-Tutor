@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { validateQuestionForm } from "@/lib/admin/question-form-validate";
+import { ensureConceptExists } from "@/lib/admin/ensure-concept";
 
 export const dynamic = "force-dynamic";
 
@@ -122,6 +123,21 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  // Ensure any new concepts exist before inserting questions (FK safety).
+  try {
+    const concepts = new Set<string>();
+    for (const v of valid) {
+      if (v.data.concept_id) concepts.add(v.data.concept_id);
+    }
+    for (const cid of concepts) {
+      await ensureConceptExists(admin, cid);
+    }
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Could not create concepts." },
+      { status: 500 },
+    );
+  }
   const payload = valid.map((v) => ({
     ...v.data,
     pool: "standard" as const,

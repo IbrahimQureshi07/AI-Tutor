@@ -2,9 +2,6 @@
  * Marketing copy for the one-time course purchase.
  * Keep claims accurate — only list features the app actually ships.
  */
-
-import { BRAND } from "@/lib/brand";
-
 export type CourseFeature = {
   title: string;
   description: string;

@@ -80,7 +80,7 @@ export async function POST(request: Request) {
       relax_column_count: true,
       delimiter,
     }) as Record<string, unknown>[];
-  } catch (e) {
+  } catch {
     return NextResponse.json(
       { error: "Could not parse CSV. Make sure it has a header row." },
       { status: 400 },

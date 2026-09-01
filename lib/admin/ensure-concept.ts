@@ -12,7 +12,7 @@ function extractSectionFromConceptId(cid: string): SectionCode | null {
 
 function humanizeConceptTitle(cid: string): string {
   const tail = cid.split(".").slice(1).join(".") || cid;
-  let t = tail
+  const t = tail
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase())
     .replace(/\bOldcar\b/g, "OLDCAR")

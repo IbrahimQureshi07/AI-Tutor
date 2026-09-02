@@ -383,7 +383,7 @@ export function AssessmentRunner({
           <div className="mt-6 grid gap-3">
             {(["A", "B", "C", "D"] as const).map((letter) => {
               const isFirstWrong =
-                s.firstSelected === letter && s.phase !== "ask";
+                s.firstSelected === letter && s.firstSelected !== correctLetter && s.phase !== "ask";
               const isSecondPick = s.selected === letter && showFeedback;
               const isCorrect = showFeedback && letter === correctLetter;
               const isWrong =

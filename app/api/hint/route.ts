@@ -28,6 +28,7 @@ Style:
 - Plain, warm, exam-coach voice. No bullet lists.
 - If a wrong answer was given, name the misconception pattern (not the correct letter).
 - Anchor with the key term, rule, formula, or SC-specific distinction the question hinges on.
+- Numeric-cutoff rule (mandatory): if the reasoning hinges on a numeric threshold (units, %, days, miles, etc.), explicitly name the cutoff and tell the student to find the option that crosses/violates it (e.g., "more than 4 units") without giving the letter.
 - End with one guiding question that points at the reasoning step, not the answer.`;
 
 export async function POST(req: Request) {

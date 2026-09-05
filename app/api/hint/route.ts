@@ -97,11 +97,15 @@ export async function POST(req: Request) {
 
     let hint = text.trim();
     // Belt-and-suspenders: never let the letter slip through.
-    const letterRe = new RegExp(
-      `\\b(option\\s*)?${q.correct_option}\\b\\.?`,
+    // IMPORTANT: avoid replacing the English article "a" when correct_option="A".
+    const letter = q.correct_option;
+    const explicitLetterRe = new RegExp(
+      `\\b(option|choice|answer|letter)\\s*${letter}\\b\\.?`,
       "gi",
     );
-    hint = hint.replace(letterRe, "the correct option");
+    hint = hint.replace(explicitLetterRe, "the correct option");
+    const parenLetterRe = new RegExp(`\\(\\s*${letter}\\s*\\)`, "g");
+    hint = hint.replace(parenLetterRe, "(the correct option)");
 
     return NextResponse.json({ hint });
   } catch (e) {

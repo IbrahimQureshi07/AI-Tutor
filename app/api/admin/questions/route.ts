@@ -33,6 +33,14 @@ function cleanSearch(q: string | null): string {
   return (q ?? "").trim().replace(/[%_]/g, "").slice(0, 120);
 }
 
+/**
+ * Quote a PostgREST filter value so commas / parens / spaces don't break
+ * `.or()` parsing. Double-quotes inside the value are escaped by doubling.
+ */
+function postgrestQuote(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
 export async function GET(request: Request) {
   const supabase = await createClient();
   const guard = await requireAdmin(supabase);
@@ -54,12 +62,14 @@ export async function GET(request: Request) {
   if (q) {
     const maybeSection = q.toUpperCase();
     const isSection = /^[AB][1-6]$/.test(maybeSection);
-    const like = `%${q}%`;
+    // Must quote: commas in question text (e.g. "specific, involuntary")
+    // are otherwise treated as OR-separators by PostgREST.
+    const like = postgrestQuote(`%${q}%`);
     query = query.or(
       [
         `prompt.ilike.${like}`,
         `concept_id.ilike.${like}`,
-        isSection ? `section_code.eq.${maybeSection}` : null,
+        isSection ? `section_code.eq.${postgrestQuote(maybeSection)}` : null,
       ]
         .filter(Boolean)
         .join(","),

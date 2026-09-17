@@ -30,15 +30,18 @@ STRICT RULES:
 5. Stay within South Carolina salesperson exam scope (SC License Law for B-series;
    national concepts for A-series).
 6. Exactly ONE option must be unambiguously correct. The other three must be
-   clearly wrong. The explanation must prove the letter you mark.
+   clearly wrong. The explanation must prove the letter you mark — every
+   figure, party, and outcome you defend in the explanation MUST appear in
+   options[correct_option], never only in a distractor.
 7. If any option is "All of the above" / "All of these" / similar, and every
-   other option is individually valid, that inclusive option MUST be correct.`;
+   other option is individually valid, that inclusive option MUST be correct.
+8. Never name a letter other than correct_option as the right answer.`;
 
 const SIBLING_SYSTEM_SAME = `${SIBLING_SYSTEM_BASE}
-8. Keep the cognitive level honest to the requested difficulty (do not get easier).`;
+9. Keep the cognitive level honest to the requested difficulty (do not get easier).`;
 
 const SIBLING_SYSTEM_HARDER = `${SIBLING_SYSTEM_BASE}
-8. Make the question MEANINGFULLY HARDER than the original:
+9. Make the question MEANINGFULLY HARDER than the original:
    - more nuanced phrasing, multi-step reasoning, or stricter qualifier;
    - distractors that mirror the exact trap the student just fell into;
    - never trivial vocabulary trade.`;
@@ -53,8 +56,193 @@ const Schema = z.object({
   }),
   correct_option: z.enum(["A", "B", "C", "D"]),
   hint: z.string().min(1).max(400).optional().nullable(),
-  explanation: z.string().min(1).max(1200).optional().nullable(),
+  explanation: z.string().min(1).max(1200),
 });
+
+const LETTERS = ["A", "B", "C", "D"] as const;
+
+const MONEY_RE = /\$[\d,]+(?:\.\d{1,2})?/g;
+const NUMBER_RE = /\b\d[\d,]*(?:\.\d+)?\b/g;
+
+function normalizeMoney(raw: string): string {
+  return raw.replace(/[$,]/g, "").replace(/\.00$/, "");
+}
+
+function extractMoneys(text: string): string[] {
+  return (text.match(MONEY_RE) ?? []).map(normalizeMoney);
+}
+
+function extractNumbers(text: string): string[] {
+  return (text.match(NUMBER_RE) ?? []).map((n) => n.replace(/,/g, ""));
+}
+
+/**
+ * Reject siblings where correct_option disagrees with the explanation
+ * (e.g. key says D/$300 credit while explanation defends $200 credit).
+ */
+export function siblingKeyMatchesExplanation(
+  parsed: z.infer<typeof Schema>,
+): boolean {
+  const letter = parsed.correct_option;
+  const explanation = parsed.explanation.trim();
+  if (!explanation) return false;
+
+  const explLower = explanation.toLowerCase();
+
+  // Explicit wrong-letter claims in the explanation.
+  for (const L of LETTERS) {
+    if (L === letter) continue;
+    const wrongLetterClaim =
+      new RegExp(
+        String.raw`(?:correct(?:\s+answer)?|answer|right\s+(?:choice|option)|key)\s*(?:is|:)\s*(?:option\s*)?${L}\b`,
+        "i",
+      ).test(explanation) ||
+      new RegExp(
+        String.raw`(?:option\s*)?${L}\s+is\s+(?:the\s+)?(?:correct|right|answer)`,
+        "i",
+      ).test(explanation) ||
+      new RegExp(
+        String.raw`why\s+(?:option\s*)?${L}\s+is\s+correct`,
+        "i",
+      ).test(explanation);
+    if (wrongLetterClaim) return false;
+  }
+
+  const correctText = parsed.options[letter];
+  const correctMoneys = new Set(extractMoneys(correctText));
+  const explMoneys = extractMoneys(explanation);
+  const explMoneySet = new Set(explMoneys);
+
+  // Amounts exclusive to the keyed option must appear in the explanation
+  // when the explanation itself cites money (classic settlement / proration bugs).
+  const exclusiveCorrect = [...correctMoneys].filter((m) => {
+    for (const L of LETTERS) {
+      if (L === letter) continue;
+      if (extractMoneys(parsed.options[L]).includes(m)) return false;
+    }
+    return true;
+  });
+
+  if (explMoneys.length > 0 && exclusiveCorrect.length > 0) {
+    const mentionsExclusive = exclusiveCorrect.some((m) => explMoneySet.has(m));
+    if (!mentionsExclusive) return false;
+  }
+
+  // Explanation cites a dollar amount that only exists on a wrong option.
+  // Fail unless it also cites at least one amount exclusive to the keyed option.
+  for (const L of LETTERS) {
+    if (L === letter) continue;
+    const exclusiveWrong = extractMoneys(parsed.options[L]).filter(
+      (m) => !correctMoneys.has(m),
+    );
+    const citesWrongOnly = exclusiveWrong.some((m) => explMoneySet.has(m));
+    if (!citesWrongOnly) continue;
+    if (
+      exclusiveCorrect.length === 0 ||
+      !exclusiveCorrect.some((m) => explMoneySet.has(m))
+    ) {
+      return false;
+    }
+  }
+
+  // Plain numeric exclusivity when options differ by bare numbers (no $).
+  if (explMoneys.length === 0) {
+    const correctNums = new Set(extractNumbers(correctText));
+    const explNums = new Set(extractNumbers(explanation));
+    const exclusiveCorrectNums = [...correctNums].filter((n) => {
+      for (const L of LETTERS) {
+        if (L === letter) continue;
+        if (extractNumbers(parsed.options[L]).includes(n)) return false;
+      }
+      return true;
+    });
+    if (exclusiveCorrectNums.length > 0 && explNums.size > 0) {
+      if (!exclusiveCorrectNums.some((n) => explNums.has(n))) return false;
+    }
+  }
+
+  // Substantial unique phrase from a wrong option appears in the explanation
+  // while the correct option's distinctive phrase does not.
+  const correctNorm = correctText.toLowerCase().replace(/\s+/g, " ").trim();
+  for (const L of LETTERS) {
+    if (L === letter) continue;
+    const wrongNorm = parsed.options[L]
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+    if (wrongNorm.length < 24) continue;
+    // Prefer a mid-length distinctive slice so tiny shared prefixes don't false-positive.
+    const slice =
+      wrongNorm.length > 48 ? wrongNorm.slice(8, 48) : wrongNorm.slice(0, 28);
+    if (slice.length < 20) continue;
+    if (!explLower.includes(slice)) continue;
+    const correctSlice =
+      correctNorm.length > 48
+        ? correctNorm.slice(8, 48)
+        : correctNorm.slice(0, 28);
+    if (correctSlice.length >= 20 && explLower.includes(correctSlice)) continue;
+    return false;
+  }
+
+  return true;
+}
+
+type SiblingParsed = z.infer<typeof Schema>;
+
+async function requestSiblingDraft({
+  parent,
+  targetDifficulty,
+  targetLevel,
+  repairNote,
+}: {
+  parent: QuestionRow;
+  targetDifficulty: SiblingDifficulty;
+  targetLevel: "easy" | "medium" | "hard";
+  repairNote?: string;
+}): Promise<SiblingParsed> {
+  const difficultyLine =
+    targetDifficulty === "harder"
+      ? `Target difficulty: ${targetLevel} (HARDER than the original "${parent.level}").`
+      : `Target difficulty: ${targetLevel} (same as the original).`;
+
+  const userPrompt = [
+    `Section: ${parent.section_code}`,
+    parent.concept_id ? `Concept: ${parent.concept_id}` : null,
+    difficultyLine,
+    "",
+    `Original question (student JUST missed this — do not repeat):`,
+    `"${parent.prompt}"`,
+    "",
+    `Original correct answer: ${parent.correct_option}. ${
+      (parent as unknown as Record<string, string>)[
+        `option_${parent.correct_option.toLowerCase()}`
+      ]
+    }`,
+    parent.explanation ? `Reference explanation: ${parent.explanation}` : "",
+    "",
+    repairNote
+      ? `CRITICAL REPAIR: ${repairNote} Re-emit a full JSON object. correct_option MUST match the option your explanation defends (same figures / outcome).`
+      : targetDifficulty === "harder"
+        ? "Write ONE fresh question on the SAME concept that is meaningfully harder than the original. Four plausible options. JSON only."
+        : "Write ONE fresh question on the SAME concept at the SAME difficulty. Four plausible options. JSON only.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const { text } = await generateText({
+    model: getModel(),
+    system:
+      targetDifficulty === "harder"
+        ? SIBLING_SYSTEM_HARDER
+        : SIBLING_SYSTEM_SAME,
+    prompt: userPrompt,
+    // Slightly cooler than before — reduces key/explanation drift.
+    temperature: targetDifficulty === "harder" ? 0.5 : 0.4,
+    maxTokens: 700,
+  });
+
+  return Schema.parse(extractJson(text));
+}
 
 export type SiblingDifficulty = "same" | "harder";
 
@@ -157,46 +345,40 @@ export async function generateSiblingQuestion({
     targetDifficulty === "harder" ? bumpLevel(parent.level) : parent.level;
 
   if (hasAI) {
-    const difficultyLine =
-      targetDifficulty === "harder"
-        ? `Target difficulty: ${targetLevel} (HARDER than the original "${parent.level}").`
-        : `Target difficulty: ${targetLevel} (same as the original).`;
-
-    const userPrompt = [
-      `Section: ${parent.section_code}`,
-      parent.concept_id ? `Concept: ${parent.concept_id}` : null,
-      difficultyLine,
-      "",
-      `Original question (student JUST missed this — do not repeat):`,
-      `"${parent.prompt}"`,
-      "",
-      `Original correct answer: ${parent.correct_option}. ${
-        (parent as unknown as Record<string, string>)[
-          `option_${parent.correct_option.toLowerCase()}`
-        ]
-      }`,
-      parent.explanation ? `Reference explanation: ${parent.explanation}` : "",
-      "",
-      targetDifficulty === "harder"
-        ? "Write ONE fresh question on the SAME concept that is meaningfully harder than the original. Four plausible options. JSON only."
-        : "Write ONE fresh question on the SAME concept at the SAME difficulty. Four plausible options. JSON only.",
-    ]
-      .filter(Boolean)
-      .join("\n");
-
     try {
-      const { text } = await generateText({
-        model: getModel(),
-        system:
-          targetDifficulty === "harder"
-            ? SIBLING_SYSTEM_HARDER
-            : SIBLING_SYSTEM_SAME,
-        prompt: userPrompt,
-        temperature: targetDifficulty === "harder" ? 0.65 : 0.55,
-        maxTokens: 700,
-      });
+      let parsed: SiblingParsed | null = null;
+      let repairNote: string | undefined;
 
-      const parsed = Schema.parse(extractJson(text));
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const draft = await requestSiblingDraft({
+          parent,
+          targetDifficulty,
+          targetLevel,
+          repairNote,
+        });
+
+        if (siblingKeyMatchesExplanation(draft)) {
+          parsed = draft;
+          break;
+        }
+
+        console.warn(
+          "sibling key/explanation mismatch; regenerating once",
+          {
+            correct_option: draft.correct_option,
+            explanation: draft.explanation.slice(0, 160),
+          },
+        );
+        repairNote =
+          `Previous draft keyed ${draft.correct_option} but the explanation defended a different option/figures. ` +
+          `Set correct_option to the letter whose option text your explanation proves, or rewrite the explanation to match ${draft.correct_option}.`;
+      }
+
+      if (!parsed) {
+        throw new Error(
+          "sibling rejected: correct_option does not match explanation after retry",
+        );
+      }
 
       const insertRow = {
         section_code: parent.section_code,
@@ -210,7 +392,7 @@ export async function generateSiblingQuestion({
         option_d: parsed.options.D.trim(),
         correct_option: parsed.correct_option,
         hint: parsed.hint?.trim() ?? null,
-        explanation: parsed.explanation?.trim() ?? null,
+        explanation: parsed.explanation.trim(),
         source: targetDifficulty === "harder" ? "ai_sibling_harder" : "ai_sibling",
         pool: "standard",
         parent_question_id: parent.id,

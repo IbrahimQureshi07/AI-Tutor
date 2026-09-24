@@ -3,6 +3,7 @@ import { parse } from "csv-parse/sync";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { adminGuardResponse, adminMisconfiguredResponse } from "@/lib/admin/admin-http";
 import { validateQuestionForm } from "@/lib/admin/question-form-validate";
 import { ensureConceptExists } from "@/lib/admin/ensure-concept";
 
@@ -47,10 +48,7 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   const guard = await requireAdmin(supabase);
   if (!guard.ok) {
-    return NextResponse.json(
-      { error: guard.reason === "unauthorized" ? "unauthorized" : "forbidden" },
-      { status: guard.reason === "unauthorized" ? 401 : 403 },
-    );
+    return adminGuardResponse(guard);
   }
 
   const url = new URL(request.url);
@@ -89,6 +87,7 @@ export async function POST(request: Request) {
 
   const errors: RowError[] = [];
   const valid: Array<ReturnType<typeof validateQuestionForm> & { ok: true }> = [];
+  const bySection: Record<string, number> = {};
 
   for (let i = 0; i < rows.length; i++) {
     const rowNum = i + 2; // header row = 1
@@ -110,19 +109,29 @@ export async function POST(request: Request) {
       continue;
     }
     valid.push(checked as ReturnType<typeof validateQuestionForm> & { ok: true });
+    const code = checked.data.section_code;
+    bySection[code] = (bySection[code] ?? 0) + 1;
   }
 
   if (!commit) {
     return NextResponse.json({
       commit: false,
+      mode: "append",
       totalRows: rows.length,
       validRows: valid.length,
       invalidRows: errors.length,
+      bySection,
       errors: errors.slice(0, 200),
     });
   }
 
-  const admin = createAdminClient();
+  // Append-only: insert new rows; never update or delete existing questions.
+  let admin: ReturnType<typeof createAdminClient>;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return adminMisconfiguredResponse();
+  }
   // Ensure any new concepts exist before inserting questions (FK safety).
   try {
     const concepts = new Set<string>();
@@ -138,6 +147,7 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+  // Append-only: insert new rows; never update or delete existing questions.
   const payload = valid.map((v) => ({
     ...v.data,
     pool: "standard" as const,
@@ -156,10 +166,12 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     commit: true,
+    mode: "append",
     totalRows: rows.length,
     validRows: valid.length,
     invalidRows: errors.length,
     inserted,
+    bySection,
     errors: errors.slice(0, 200),
   });
 }

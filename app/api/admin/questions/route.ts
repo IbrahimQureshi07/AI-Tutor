@@ -5,6 +5,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { validateQuestionForm } from "@/lib/admin/question-form-validate";
 import { ensureConceptExists } from "@/lib/admin/ensure-concept";
+import { adminGuardResponse, adminMisconfiguredResponse } from "@/lib/admin/admin-http";
+import {
+  applyQuestionListFilters,
+  cleanQuestionSearch,
+  parseQuestionGroup,
+  parseQuestionSection,
+  parseQuestionSource,
+  resolveQuestionSectionCodes,
+} from "@/lib/admin/question-list-filters";
 
 const UpdateBody = z.object({
   id: z.string().uuid(),
@@ -20,8 +29,15 @@ const UpdateBody = z.object({
   explanation: z.string().nullable().optional(),
 });
 
+const DeleteBody = z.object({
+  id: z.string().uuid(),
+});
+
 const SELECT =
-  "id, section_code, concept_id, level, prompt, option_a, option_b, option_c, option_d, correct_option, explanation";
+  "id, section_code, concept_id, level, prompt, option_a, option_b, option_c, option_d, correct_option, explanation, is_ai_generated";
+
+const IDS_PAGE = 1000;
+const IDS_MAX = 20_000;
 
 function clampInt(v: string | null, { min, max, fallback }: { min: number; max: number; fallback: number }) {
   const n = Number(v);
@@ -29,54 +45,67 @@ function clampInt(v: string | null, { min, max, fallback }: { min: number; max: 
   return Math.max(min, Math.min(max, Math.trunc(n)));
 }
 
-function cleanSearch(q: string | null): string {
-  return (q ?? "").trim().replace(/[%_]/g, "").slice(0, 120);
-}
-
-/**
- * Quote a PostgREST filter value so commas / parens / spaces don't break
- * `.or()` parsing. Double-quotes inside the value are escaped by doubling.
- */
-function postgrestQuote(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`;
-}
-
 export async function GET(request: Request) {
   const supabase = await createClient();
   const guard = await requireAdmin(supabase);
   if (!guard.ok) {
-    return NextResponse.json(
-      { error: guard.reason === "unauthorized" ? "unauthorized" : "forbidden" },
-      { status: guard.reason === "unauthorized" ? 401 : 403 },
-    );
+    return adminGuardResponse(guard);
   }
 
   const url = new URL(request.url);
-  const q = cleanSearch(url.searchParams.get("q"));
+  const q = cleanQuestionSearch(url.searchParams.get("q"));
   const offset = clampInt(url.searchParams.get("offset"), { min: 0, max: 200_000, fallback: 0 });
   const limit = clampInt(url.searchParams.get("limit"), { min: 1, max: 500, fallback: 200 });
+  const source = parseQuestionSource(url.searchParams.get("source"));
+  const group = parseQuestionGroup(url.searchParams.get("group"));
+  const section = parseQuestionSection(url.searchParams.get("section"));
+  const idsOnly = url.searchParams.get("idsOnly") === "1";
+  const sectionCodes = resolveQuestionSectionCodes(section, group);
 
-  const admin = createAdminClient();
-  let query = admin.from("questions").select(SELECT).order("created_at", { ascending: false }).order("id", { ascending: false });
+  let admin: ReturnType<typeof createAdminClient>;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return adminMisconfiguredResponse();
+  }
+  const filters = { source, sectionCodes, q };
 
-  if (q) {
-    const maybeSection = q.toUpperCase();
-    const isSection = /^[AB][1-6]$/.test(maybeSection);
-    // Must quote: commas in question text (e.g. "specific, involuntary")
-    // are otherwise treated as OR-separators by PostgREST.
-    const like = postgrestQuote(`%${q}%`);
-    query = query.or(
-      [
-        `prompt.ilike.${like}`,
-        `concept_id.ilike.${like}`,
-        isSection ? `section_code.eq.${postgrestQuote(maybeSection)}` : null,
-      ]
-        .filter(Boolean)
-        .join(","),
-    );
+  if (idsOnly) {
+    const ids: string[] = [];
+    let from = 0;
+    for (;;) {
+      let idQuery = admin
+        .from("questions")
+        .select("id")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, from + IDS_PAGE - 1);
+      idQuery = applyQuestionListFilters(idQuery as never, filters) as typeof idQuery;
+      const { data, error } = await idQuery;
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      const chunk = (data ?? []) as Array<{ id: string }>;
+      for (const row of chunk) ids.push(row.id);
+      if (chunk.length < IDS_PAGE || ids.length >= IDS_MAX) {
+        return NextResponse.json({
+          ids,
+          total: ids.length,
+          capped: ids.length >= IDS_MAX && chunk.length === IDS_PAGE,
+        });
+      }
+      from += IDS_PAGE;
+    }
   }
 
-  const { data, error } = await query.range(offset, offset + limit - 1);
+  let query = admin
+    .from("questions")
+    .select(SELECT, { count: "exact" })
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false });
+  query = applyQuestionListFilters(query as never, filters) as typeof query;
+
+  const { data, error, count } = await query.range(offset, offset + limit - 1);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -86,6 +115,10 @@ export async function GET(request: Request) {
     limit,
     nextOffset: offset + (data?.length ?? 0),
     hasMore: (data?.length ?? 0) === limit,
+    totalMatching: count ?? null,
+    source,
+    section,
+    group,
   });
 }
 
@@ -93,10 +126,7 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   const guard = await requireAdmin(supabase);
   if (!guard.ok) {
-    return NextResponse.json(
-      { error: guard.reason === "unauthorized" ? "unauthorized" : "forbidden" },
-      { status: guard.reason === "unauthorized" ? 401 : 403 },
-    );
+    return adminGuardResponse(guard);
   }
 
   const raw = await request.json().catch(() => ({}));
@@ -108,7 +138,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const admin = createAdminClient();
+  let admin: ReturnType<typeof createAdminClient>;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return adminMisconfiguredResponse();
+  }
   try {
     await ensureConceptExists(admin, checked.data.concept_id);
   } catch (e) {
@@ -138,10 +173,7 @@ export async function PATCH(request: Request) {
   const supabase = await createClient();
   const guard = await requireAdmin(supabase);
   if (!guard.ok) {
-    return NextResponse.json(
-      { error: guard.reason === "unauthorized" ? "unauthorized" : "forbidden" },
-      { status: guard.reason === "unauthorized" ? 401 : 403 },
-    );
+    return adminGuardResponse(guard);
   }
 
   const raw = await request.json().catch(() => ({}));
@@ -189,7 +221,12 @@ export async function PATCH(request: Request) {
     updatePayload = checked.data;
   }
 
-  const admin = createAdminClient();
+  let admin: ReturnType<typeof createAdminClient>;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return adminMisconfiguredResponse();
+  }
   if (typeof (updatePayload as { concept_id?: unknown }).concept_id === "string") {
     try {
       await ensureConceptExists(admin, (updatePayload as { concept_id?: string | null }).concept_id);
@@ -210,4 +247,44 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ question: data });
+}
+
+export async function DELETE(request: Request) {
+  const supabase = await createClient();
+  const guard = await requireAdmin(supabase);
+  if (!guard.ok) {
+    return adminGuardResponse(guard);
+  }
+
+  const raw = await request.json().catch(() => ({}));
+  const parsed = DeleteBody.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid question id." }, { status: 400 });
+  }
+
+  let admin: ReturnType<typeof createAdminClient>;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return adminMisconfiguredResponse();
+  }
+  const { data, error } = await admin
+    .from("questions")
+    .delete()
+    .eq("id", parsed.data.id)
+    .select("id, is_ai_generated")
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!data) {
+    return NextResponse.json({ error: "Question not found." }, { status: 404 });
+  }
+
+  return NextResponse.json({
+    deleted: true,
+    id: data.id,
+    is_ai_generated: data.is_ai_generated === true,
+  });
 }

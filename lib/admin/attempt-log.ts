@@ -1,7 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  resolveQuestionContentOrigin,
   resolveSessionRunType,
   sessionModeLabel,
+  type QuestionContentOrigin,
   type SessionMode,
   type SessionRunType,
 } from "@/lib/admin/session-history";
@@ -12,6 +14,8 @@ export type AttemptLogFilters = {
   runType?: "smoke" | "full" | "other" | "all";
   section?: string | "all";
   result?: "correct" | "wrong" | "all";
+  /** Dataset bank vs LLM-generated sibling questions. */
+  source?: "dataset" | "llm" | "all";
   /** Primary attempts only (exclude GPT extra tries). Default false. */
   primaryOnly?: boolean;
   limit?: number;
@@ -26,6 +30,7 @@ export type AttemptLogRow = {
   promptPreview: string;
   isCorrect: boolean;
   isSibling: boolean;
+  contentOrigin: QuestionContentOrigin;
   createdAt: string;
 };
 
@@ -56,7 +61,7 @@ export async function loadAttemptLog(
   const { data: rows } = await client
     .from("attempts")
     .select(
-      "id, mode, session_id, is_correct, is_sibling, created_at, question:questions(section_code, prompt), session:sessions(mode, config)",
+      "id, mode, session_id, is_correct, is_sibling, created_at, question:questions(section_code, prompt, source, is_ai_generated), session:sessions(mode, config)",
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
@@ -65,13 +70,22 @@ export async function loadAttemptLog(
   const all: AttemptLogRow[] = [];
 
   for (const row of rows ?? []) {
-    const q = row.question as { section_code?: string; prompt?: string } | null;
+    const q = row.question as {
+      section_code?: string;
+      prompt?: string;
+      source?: string | null;
+      is_ai_generated?: boolean | null;
+    } | null;
     const sess = row.session as { mode?: string; config?: unknown } | null;
     const sessionMode = (sess?.mode ?? row.mode) as SessionMode;
     const runType = resolveSessionRunType(
       sessionMode,
       (sess?.config as Record<string, unknown> | null) ?? null,
     );
+    const contentOrigin = resolveQuestionContentOrigin({
+      source: q?.source,
+      isAiGenerated: q?.is_ai_generated,
+    });
 
     all.push({
       id: row.id as string,
@@ -82,6 +96,7 @@ export async function loadAttemptLog(
       promptPreview: truncatePrompt(q?.prompt ?? "—"),
       isCorrect: Boolean(row.is_correct),
       isSibling: Boolean(row.is_sibling),
+      contentOrigin,
       createdAt: row.created_at as string,
     });
   }
@@ -110,6 +125,10 @@ export async function loadAttemptLog(
     filtered = filtered.filter((a) => a.isCorrect);
   } else if (filters.result === "wrong") {
     filtered = filtered.filter((a) => !a.isCorrect);
+  }
+
+  if (filters.source === "dataset" || filters.source === "llm") {
+    filtered = filtered.filter((a) => a.contentOrigin.kind === filters.source);
   }
 
   return {

@@ -19,6 +19,11 @@ type AttemptRow = {
   promptPreview: string;
   isCorrect: boolean;
   isSibling: boolean;
+  contentOrigin: {
+    kind: "dataset" | "llm";
+    label: string;
+    detail: string;
+  };
   createdAt: string;
 };
 
@@ -27,6 +32,7 @@ type Filters = {
   runType: string;
   section: string;
   result: string;
+  source: string;
   primaryOnly: boolean;
 };
 
@@ -50,6 +56,12 @@ const RESULT_OPTIONS = [
   { value: "all", label: "All results" },
   { value: "correct", label: "Correct" },
   { value: "wrong", label: "Wrong" },
+];
+
+const SOURCE_OPTIONS = [
+  { value: "all", label: "All sources" },
+  { value: "dataset", label: "Dataset" },
+  { value: "llm", label: "LLM" },
 ];
 
 const MODE_LABELS: Record<string, string> = {
@@ -77,6 +89,7 @@ function buildQuery(studentId: string, f: Filters): string {
   if (f.runType !== "all") p.set("runType", f.runType);
   if (f.section !== "all") p.set("section", f.section);
   if (f.result !== "all") p.set("result", f.result);
+  if (f.source !== "all") p.set("source", f.source);
   if (f.primaryOnly) p.set("primaryOnly", "1");
   p.set("limit", "200");
   const qs = p.toString();
@@ -89,6 +102,7 @@ export function StudentAttemptLogPanel({ studentId }: { studentId: string }) {
     runType: "all",
     section: "all",
     result: "all",
+    source: "all",
     primaryOnly: false,
   });
   const [rows, setRows] = React.useState<AttemptRow[]>([]);
@@ -132,11 +146,11 @@ export function StudentAttemptLogPanel({ studentId }: { studentId: string }) {
         <CardTitle>Question attempt log</CardTitle>
         <p className="text-xs text-ink-muted">
           Every question answered across all sessions — filter by mode, run type,
-          section, or result.
+          section, result, or source (dataset vs LLM).
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <label className="space-y-1">
             <span className="text-[10px] uppercase tracking-wide text-ink-muted">
               Mode
@@ -202,6 +216,22 @@ export function StudentAttemptLogPanel({ studentId }: { studentId: string }) {
               ))}
             </select>
           </label>
+          <label className="space-y-1">
+            <span className="text-[10px] uppercase tracking-wide text-ink-muted">
+              Source
+            </span>
+            <select
+              value={filters.source}
+              onChange={(e) => setFilter("source", e.target.value)}
+              className={`${selectCls} w-full`}
+            >
+              {SOURCE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="flex items-end gap-2 pb-1">
             <input
               id="primary-only"
@@ -225,13 +255,14 @@ export function StudentAttemptLogPanel({ studentId }: { studentId: string }) {
           ) : rows.length === 0 ? (
             <p className="text-sm text-ink-muted">No attempts match these filters.</p>
           ) : (
-            <table className="w-full min-w-[720px] text-sm">
+            <table className="w-full min-w-[820px] text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-ink-muted uppercase tracking-wide">
                   <th className="pb-2 pr-3 font-medium">Question</th>
                   <th className="pb-2 pr-3 font-medium w-16">Section</th>
                   <th className="pb-2 pr-3 font-medium w-24">Mode</th>
                   <th className="pb-2 pr-3 font-medium w-16">Type</th>
+                  <th className="pb-2 pr-3 font-medium w-24">Source</th>
                   <th className="pb-2 pr-3 font-medium w-20">Result</th>
                   <th className="pb-2 font-medium w-28">Date</th>
                 </tr>
@@ -266,6 +297,17 @@ export function StudentAttemptLogPanel({ studentId }: { studentId: string }) {
                         a.runType as SessionRunType,
                         a.mode,
                       )}
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <Badge
+                        variant={
+                          a.contentOrigin?.kind === "llm" ? "secondary" : "outline"
+                        }
+                        className="text-[10px]"
+                        title={a.contentOrigin?.detail}
+                      >
+                        {a.contentOrigin?.kind === "llm" ? "LLM" : "Dataset"}
+                      </Badge>
                     </td>
                     <td className="py-2.5 pr-3">
                       <Badge

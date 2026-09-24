@@ -23,6 +23,7 @@ function parseFilters(searchParams: URLSearchParams): AttemptLogFilters {
   const runType = searchParams.get("runType");
   const section = searchParams.get("section");
   const result = searchParams.get("result");
+  const source = searchParams.get("source");
   const limitRaw = searchParams.get("limit");
 
   const filters: AttemptLogFilters = {
@@ -30,6 +31,7 @@ function parseFilters(searchParams: URLSearchParams): AttemptLogFilters {
     runType: "all",
     section: "all",
     result: "all",
+    source: "all",
     primaryOnly: searchParams.get("primaryOnly") === "1",
   };
 
@@ -47,6 +49,10 @@ function parseFilters(searchParams: URLSearchParams): AttemptLogFilters {
 
   if (result === "correct" || result === "wrong") {
     filters.result = result;
+  }
+
+  if (source === "dataset" || source === "llm") {
+    filters.source = source;
   }
 
   const limit = limitRaw ? Number(limitRaw) : 200;

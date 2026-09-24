@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { AdminMetricTooltip } from "@/components/admin/admin-metric-tooltip";
 import { PaywallTogglePanel } from "@/components/admin/paywall-toggle-panel";
+import { GlobalModeLockPanel } from "@/components/admin/global-mode-lock-panel";
 
 type ModeKey = "assessment" | "practice" | "mistakes" | "mock" | "final";
 
@@ -136,6 +137,7 @@ export default function AdminHomePage() {
       </div>
 
       <PaywallTogglePanel />
+      <GlobalModeLockPanel />
 
       {loading ? (
         <p className="text-sm text-ink-muted">Loading overview…</p>

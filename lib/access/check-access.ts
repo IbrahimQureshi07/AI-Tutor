@@ -4,6 +4,10 @@ import {
   resolveIsAdmin,
 } from "@/lib/auth/bootstrap-admin";
 import { isPaywallEnabled } from "@/lib/access/paywall-settings";
+import {
+  getGlobalDisabledModes,
+  mergeDisabledModes,
+} from "@/lib/access/global-mode-locks";
 import { MODES, type ModeKey } from "@/lib/constants";
 import type {
   AccessProfile,
@@ -299,7 +303,7 @@ export async function getAccessState(
   }
 
   const isAdmin = resolveIsAdmin(user, loaded.profile);
-  const state = resolveAccessState(
+  let state = resolveAccessState(
     loaded.profile,
     isAdmin,
     true,
@@ -315,10 +319,21 @@ export async function getAccessState(
   ) {
     const paywallOn = await isPaywallEnabled(supabase);
     if (!paywallOn) {
-      return {
+      state = {
         ...state,
         hasFullAccess: true,
         needsPaywall: false,
+      };
+    }
+  }
+
+  // Global mode locks apply to every student, on top of per-student locks.
+  if (!state.isAdmin) {
+    const globalDisabled = await getGlobalDisabledModes(supabase);
+    if (globalDisabled.length > 0) {
+      state = {
+        ...state,
+        disabledModes: mergeDisabledModes(state.disabledModes, globalDisabled),
       };
     }
   }

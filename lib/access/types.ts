@@ -1,4 +1,4 @@
-import type { ModeKey } from "@/lib/constants";
+import type { ModeKey, SectionCode } from "@/lib/constants";
 
 export type AccessStatus = "none" | "demo_completed" | "active" | "expired";
 
@@ -12,6 +12,8 @@ export type AccessProfile = {
   payment_provider: PaymentProvider | null;
   /** Added by migration 0008. Missing during a safe pre-migration rollout. */
   disabled_modes: ModeKey[] | null;
+  /** Added by migration 0009. Missing during a safe pre-migration rollout. */
+  disabled_assessment_sections: SectionCode[] | null;
   /** Exists in 0001_init.sql — used to grandfather pre-cutover accounts. */
   created_at: string | null;
 };
@@ -21,6 +23,8 @@ export type AccessState = {
   migrationApplied: boolean;
   /** False until migration 0008 is applied; locks safely default to none. */
   modeLocksApplied: boolean;
+  /** False until migration 0009 is applied; section locks safely default to none. */
+  assessmentSectionLocksApplied: boolean;
   status: AccessStatus;
   hasFullAccess: boolean;
   isAdmin: boolean;
@@ -34,6 +38,8 @@ export type AccessState = {
   canUseFreeModes: boolean;
   /** Allowed paid exam modes (mock/final). */
   canUsePaidExams: boolean;
-  /** Modes explicitly locked for this student by an admin. */
+  /** Modes explicitly locked for this student by an admin (plus global merge). */
   disabledModes: ModeKey[];
+  /** Assessment A1–B6 sections locked for this student by an admin. */
+  disabledAssessmentSections: SectionCode[];
 };

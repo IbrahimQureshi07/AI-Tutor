@@ -3,6 +3,7 @@ import { SECTIONS, type SectionCode } from "@/lib/constants";
 import { getAssessmentCoverage } from "@/lib/assessment/coverage";
 import { getStandardQuestionCountsBySection } from "@/lib/questions/bank-counts";
 import { requireAppUser } from "@/lib/auth/request-session";
+import { getAccessState } from "@/lib/access/check-access";
 
 export default async function AssessmentIntro({
   searchParams,
@@ -20,10 +21,13 @@ export default async function AssessmentIntro({
   const validCodes = new Set(SECTIONS.map((s) => s.code));
   const preselect = requested.filter((c) => validCodes.has(c));
 
-  const [counts, coverage] = await Promise.all([
+  const [counts, coverage, access] = await Promise.all([
     getStandardQuestionCountsBySection(),
     getAssessmentCoverage(supabase, user.id),
+    getAccessState(supabase, user),
   ]);
+  const lockedSections = access.disabledAssessmentSections;
+  const lockedSet = new Set(lockedSections);
   const sections = SECTIONS.map((s) => ({ ...s, count: counts[s.code] ?? 0 }));
 
   let initialPicked: SectionCode[];
@@ -32,14 +36,19 @@ export default async function AssessmentIntro({
   } else if (!coverage.allCovered) {
     initialPicked = coverage.missing;
   } else {
-    initialPicked = sections.filter((s) => s.count > 0).map((s) => s.code as SectionCode);
+    initialPicked = sections
+      .filter((s) => s.count > 0)
+      .map((s) => s.code as SectionCode);
   }
+  // Never pre-select admin-locked Assessment sections.
+  initialPicked = initialPicked.filter((code) => !lockedSet.has(code));
 
   return (
     <AssessmentPicker
       sections={sections}
       initialPicked={initialPicked}
       coverage={coverage}
+      lockedSections={lockedSections}
     />
   );
 }

@@ -53,7 +53,13 @@ export async function loadAdminStudentAccess(
     };
   }
 
-  const state = resolveAccessState(loaded.profile, isTargetAdmin, true);
+  const state = resolveAccessState(
+    loaded.profile,
+    isTargetAdmin,
+    true,
+    loaded.modeLocksApplied,
+    loaded.assessmentSectionLocksApplied,
+  );
   return {
     migrationApplied: true,
     status: state.status,

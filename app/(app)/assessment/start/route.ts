@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { startSession, attachQuestionsToSession } from "@/lib/runner/session";
 import { pickAssessmentQuestions } from "@/lib/assessment/select";
+import { isAssessmentSectionDisabled } from "@/lib/access/check-access";
 import {
   accessDeniedResponse,
   requireModeAccess,
@@ -23,6 +24,9 @@ const Body = z.object({
     .max(VALID_SECTIONS.length),
 });
 
+const SECTION_LOCKED_MESSAGE =
+  "This section is locked by an administrator.";
+
 export async function POST(req: Request) {
   const json = await req.json().catch(() => ({}));
   const parsed = Body.safeParse(json);
@@ -40,6 +44,22 @@ export async function POST(req: Request) {
   const supabase = await createClient();
   const guard = await requireModeAccess(supabase, "assessment");
   if (!guard.ok) return accessDeniedResponse(guard);
+
+  const lockedSections = sections.filter((code) =>
+    isAssessmentSectionDisabled(guard.access, code),
+  );
+  if (lockedSections.length > 0) {
+    return NextResponse.json(
+      {
+        error:
+          lockedSections.length === 1
+            ? SECTION_LOCKED_MESSAGE
+            : `These sections are locked by an administrator: ${lockedSections.join(", ")}.`,
+        lockedSections,
+      },
+      { status: 403 },
+    );
+  }
 
   const questions = await pickAssessmentQuestions(
     supabase,

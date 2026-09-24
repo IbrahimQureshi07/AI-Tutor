@@ -15,6 +15,7 @@ import {
   type StudentAccessInfo,
 } from "@/components/admin/grant-access-panel";
 import { ModeLockPanel } from "@/components/admin/mode-lock-panel";
+import { AssessmentSectionLockPanel } from "@/components/admin/assessment-section-lock-panel";
 import {
   sessionRunTypeLabel,
   type SessionHistoryRow,
@@ -278,6 +279,11 @@ export default function AdminStudentDetailPage() {
       />
 
       <ModeLockPanel
+        studentId={student.id}
+        studentRole={student.role}
+      />
+
+      <AssessmentSectionLockPanel
         studentId={student.id}
         studentRole={student.role}
       />

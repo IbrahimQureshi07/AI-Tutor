@@ -56,21 +56,30 @@ export function AssessmentPicker({
   sections,
   initialPicked,
   coverage,
+  lockedSections = [],
 }: {
   sections: Section[];
   initialPicked?: string[];
   coverage?: Coverage;
+  /** Admin-locked Assessment sections (A1–B6) — shown disabled. */
+  lockedSections?: string[];
 }) {
   const router = useRouter();
+  const lockedSet = React.useMemo(
+    () => new Set(lockedSections),
+    [lockedSections],
+  );
   const [length, setLength] = React.useState<Length>("quick");
   const [picked, setPicked] = React.useState<Set<string>>(() => {
+    const eligibleCodes = new Set(
+      sections
+        .filter((s) => s.count > 0 && !lockedSet.has(s.code))
+        .map((s) => s.code),
+    );
     if (initialPicked && initialPicked.length) {
-      const eligibleCodes = new Set(
-        sections.filter((s) => s.count > 0).map((s) => s.code),
-      );
       return new Set(initialPicked.filter((c) => eligibleCodes.has(c)));
     }
-    return new Set(sections.filter((s) => s.count > 0).map((s) => s.code));
+    return new Set(eligibleCodes);
   });
   const [pending, setPending] = React.useState(false);
 
@@ -89,11 +98,15 @@ export function AssessmentPicker({
   }, [coverage?.freshness]);
   const freshnessDays = coverage?.freshnessDays ?? 7;
 
-  const eligible = sections.filter((s) => s.count > 0);
-  const allSelected = picked.size === eligible.length;
+  const eligible = sections.filter(
+    (s) => s.count > 0 && !lockedSet.has(s.code),
+  );
+  const allSelected = eligible.length > 0 && picked.size === eligible.length;
   const totalQuestions = picked.size * LENGTH_PER_SECTION[length];
+  const lockedCount = sections.filter((s) => lockedSet.has(s.code)).length;
 
   function togglePick(code: string) {
+    if (lockedSet.has(code)) return;
     setPicked((prev) => {
       const next = new Set(prev);
       if (next.has(code)) next.delete(code);
@@ -106,12 +119,23 @@ export function AssessmentPicker({
     else setPicked(new Set(eligible.map((s) => s.code)));
   }
   function pickGroup(group: "National" | "State") {
-    setPicked(new Set(eligible.filter((s) => s.group === group).map((s) => s.code)));
+    setPicked(
+      new Set(
+        eligible.filter((s) => s.group === group).map((s) => s.code),
+      ),
+    );
   }
 
   async function start() {
-    if (!picked.size) {
-      toast.error("Pick at least one section.");
+    const sectionsToStart = Array.from(picked).filter(
+      (code) => !lockedSet.has(code),
+    );
+    if (!sectionsToStart.length) {
+      toast.error(
+        lockedCount > 0
+          ? "All selected sections are locked by an administrator."
+          : "Pick at least one section.",
+      );
       return;
     }
     setPending(true);
@@ -121,7 +145,7 @@ export function AssessmentPicker({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           length,
-          sections: Array.from(picked),
+          sections: sectionsToStart,
         }),
       });
       const json = await res.json();
@@ -259,10 +283,18 @@ export function AssessmentPicker({
             </div>
           </div>
 
+          {lockedCount > 0 && (
+            <p className="mb-3 text-xs text-ink-muted">
+              {lockedCount} section{lockedCount === 1 ? "" : "s"} locked by an
+              administrator and cannot be selected.
+            </p>
+          )}
+
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {sections.map((s) => {
-              const disabled = s.count === 0;
-              const active = picked.has(s.code);
+              const adminLocked = lockedSet.has(s.code);
+              const disabled = s.count === 0 || adminLocked;
+              const active = !adminLocked && picked.has(s.code);
               const done = coveredSet.has(s.code);
               const stale = staleSet.has(s.code);
               const fr = freshnessByCode.get(s.code);
@@ -272,10 +304,18 @@ export function AssessmentPicker({
                   type="button"
                   disabled={disabled}
                   onClick={() => togglePick(s.code)}
+                  title={
+                    adminLocked
+                      ? "This section is locked by an administrator"
+                      : s.count === 0
+                        ? "No questions available"
+                        : undefined
+                  }
                   className={cn(
                     "group relative text-left rounded-2xl border p-3 transition-all focus-ring",
                     "flex items-center gap-3",
                     disabled && "opacity-40 cursor-not-allowed",
+                    adminLocked && "opacity-55",
                     !disabled && active && "border-primary bg-primary-soft/40",
                     !disabled && !active && "border-border bg-surface hover:bg-elevated",
                   )}
@@ -295,26 +335,37 @@ export function AssessmentPicker({
                       {formatSectionDisplayLabel(s.code)}
                     </div>
                     <div className="text-xs text-ink-muted">
-                      {s.count.toLocaleString()} questions
-                      {done && fr?.daysSinceAssessed != null && (
-                        <span className="ml-1 text-success">
-                          · fresh
-                          {fr.daysSinceAssessed === 0
-                            ? " · today"
-                            : ` · ${fr.daysSinceAssessed}d ago`}
-                        </span>
-                      )}
-                      {!done && stale && fr?.daysSinceAssessed != null && (
-                        <span className="ml-1 text-warn">
-                          · stale · {fr.daysSinceAssessed}d ago
-                        </span>
-                      )}
-                      {done && fr?.daysSinceAssessed == null && (
-                        <span className="ml-1 text-success">· assessed</span>
+                      {adminLocked ? (
+                    <span className="inline-flex items-center gap-1 text-warn">
+                      <Lock className="h-3 w-3" />
+                      This section is locked by an administrator
+                    </span>
+                  ) : (
+                        <>
+                          {s.count.toLocaleString()} questions
+                          {done && fr?.daysSinceAssessed != null && (
+                            <span className="ml-1 text-success">
+                              · fresh
+                              {fr.daysSinceAssessed === 0
+                                ? " · today"
+                                : ` · ${fr.daysSinceAssessed}d ago`}
+                            </span>
+                          )}
+                          {!done && stale && fr?.daysSinceAssessed != null && (
+                            <span className="ml-1 text-warn">
+                              · stale · {fr.daysSinceAssessed}d ago
+                            </span>
+                          )}
+                          {done && fr?.daysSinceAssessed == null && (
+                            <span className="ml-1 text-success">· assessed</span>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
-                  {active ? (
+                  {adminLocked ? (
+                    <Lock className="h-4 w-4 text-warn shrink-0" />
+                  ) : active ? (
                     <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
                   ) : done ? (
                     <CheckCircle2 className="h-4 w-4 text-success/70 shrink-0" />

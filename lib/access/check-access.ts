@@ -8,7 +8,7 @@ import {
   getGlobalDisabledModes,
   mergeDisabledModes,
 } from "@/lib/access/global-mode-locks";
-import { MODES, type ModeKey } from "@/lib/constants";
+import { MODES, SECTIONS, type ModeKey, type SectionCode } from "@/lib/constants";
 import type {
   AccessProfile,
   AccessState,
@@ -25,6 +25,7 @@ const ACCESS_STATUSES: AccessStatus[] = [
   "expired",
 ];
 const MODE_KEYS = Object.keys(MODES) as ModeKey[];
+const SECTION_CODES = SECTIONS.map((s) => s.code) as SectionCode[];
 
 export function isMissingAccessColumnsError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -46,6 +47,18 @@ export function isMissingDisabledModesColumnError(error: unknown): boolean {
   return (
     (e.code === "42703" || e.code === "PGRST204" || msg.includes("column")) &&
     msg.includes("disabled_modes")
+  );
+}
+
+export function isMissingDisabledAssessmentSectionsColumnError(
+  error: unknown,
+): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as { message?: string; details?: string; code?: string };
+  const msg = `${e.message ?? ""} ${e.details ?? ""}`.toLowerCase();
+  return (
+    (e.code === "42703" || e.code === "PGRST204" || msg.includes("column")) &&
+    msg.includes("disabled_assessment_sections")
   );
 }
 
@@ -73,11 +86,24 @@ function normalizeDisabledModes(value: unknown): ModeKey[] {
   ];
 }
 
+function normalizeDisabledAssessmentSections(value: unknown): SectionCode[] {
+  if (!Array.isArray(value)) return [];
+  return SECTION_CODES.filter((code) => value.includes(code));
+}
+
 export function isModeDisabled(
   access: AccessState,
   mode: ModeKey,
 ): boolean {
   return !access.isAdmin && access.disabledModes.includes(mode);
+}
+
+export function isAssessmentSectionDisabled(
+  access: AccessState,
+  section: SectionCode | string,
+): boolean {
+  if (access.isAdmin) return false;
+  return access.disabledAssessmentSections.includes(section as SectionCode);
 }
 
 export function canUseMode(access: AccessState, mode: ModeKey): boolean {
@@ -120,6 +146,7 @@ export function buildLegacyFullAccessState(isAdmin: boolean): AccessState {
   return {
     migrationApplied: false,
     modeLocksApplied: false,
+    assessmentSectionLocksApplied: false,
     status: "active",
     hasFullAccess: true,
     isAdmin,
@@ -130,6 +157,7 @@ export function buildLegacyFullAccessState(isAdmin: boolean): AccessState {
     canUseFreeModes: true,
     canUsePaidExams: true,
     disabledModes: [],
+    disabledAssessmentSections: [],
   };
 }
 
@@ -138,6 +166,7 @@ export function resolveAccessState(
   isAdmin: boolean,
   migrationApplied: boolean,
   modeLocksApplied = true,
+  assessmentSectionLocksApplied = true,
 ): AccessState {
   if (!migrationApplied) {
     return buildLegacyFullAccessState(isAdmin);
@@ -148,11 +177,18 @@ export function resolveAccessState(
     isAdmin || !modeLocksApplied
       ? []
       : normalizeDisabledModes(profile?.disabled_modes);
+  const disabledAssessmentSections =
+    isAdmin || !assessmentSectionLocksApplied
+      ? []
+      : normalizeDisabledAssessmentSections(
+          profile?.disabled_assessment_sections,
+        );
 
   if (profile?.is_active === false && !isAdmin) {
     return {
       migrationApplied: true,
       modeLocksApplied,
+      assessmentSectionLocksApplied,
       status: normalizeAccessStatus(profile.access_status),
       hasFullAccess: false,
       isAdmin: false,
@@ -163,6 +199,7 @@ export function resolveAccessState(
       canUseFreeModes: false,
       canUsePaidExams: false,
       disabledModes,
+      disabledAssessmentSections,
     };
   }
 
@@ -170,6 +207,7 @@ export function resolveAccessState(
     return {
       migrationApplied: true,
       modeLocksApplied,
+      assessmentSectionLocksApplied,
       status: "active",
       hasFullAccess: true,
       isAdmin: true,
@@ -180,6 +218,7 @@ export function resolveAccessState(
       canUseFreeModes: true,
       canUsePaidExams: true,
       disabledModes: [],
+      disabledAssessmentSections: [],
     };
   }
 
@@ -190,6 +229,7 @@ export function resolveAccessState(
   return {
     migrationApplied: true,
     modeLocksApplied,
+    assessmentSectionLocksApplied,
     status,
     hasFullAccess,
     isAdmin: false,
@@ -200,6 +240,7 @@ export function resolveAccessState(
     canUseFreeModes: true,
     canUsePaidExams,
     disabledModes,
+    disabledAssessmentSections,
   };
 }
 
@@ -212,23 +253,27 @@ export async function loadAccessProfile(
       profile: AccessProfile | null;
       migrationApplied: true;
       modeLocksApplied: boolean;
+      assessmentSectionLocksApplied: boolean;
     }
   | {
       ok: true;
       profile: null;
       migrationApplied: false;
       modeLocksApplied: false;
+      assessmentSectionLocksApplied: false;
     }
   | { ok: false; error: unknown }
 > {
-  const fullSelect =
+  const withBoth =
+    "role, is_active, access_status, paid_at, payment_provider, created_at, disabled_modes, disabled_assessment_sections";
+  const withModes =
     "role, is_active, access_status, paid_at, payment_provider, created_at, disabled_modes";
   const legacySelect =
     "role, is_active, access_status, paid_at, payment_provider, created_at";
 
   const { data, error } = await supabase
     .from("profiles")
-    .select(fullSelect)
+    .select(withBoth)
     .eq("id", userId)
     .maybeSingle<AccessProfile>();
 
@@ -238,26 +283,101 @@ export async function loadAccessProfile(
       profile: data ?? null,
       migrationApplied: true,
       modeLocksApplied: true,
+      assessmentSectionLocksApplied: true,
     };
   }
 
-  // Migration 0008 can be deployed after this code. Retry without the new
-  // column so the existing app keeps working with no extra locks meanwhile.
-  if (isMissingDisabledModesColumnError(error)) {
+  // Migration 0009 can land after this code. Retry without assessment sections.
+  if (isMissingDisabledAssessmentSectionsColumnError(error)) {
     const retry = await supabase
       .from("profiles")
-      .select(legacySelect)
+      .select(withModes)
       .eq("id", userId)
-      .maybeSingle<Omit<AccessProfile, "disabled_modes">>();
+      .maybeSingle<Omit<AccessProfile, "disabled_assessment_sections">>();
 
     if (!retry.error) {
       return {
         ok: true,
         profile: retry.data
-          ? { ...retry.data, disabled_modes: null }
+          ? { ...retry.data, disabled_assessment_sections: null }
+          : null,
+        migrationApplied: true,
+        modeLocksApplied: true,
+        assessmentSectionLocksApplied: false,
+      };
+    }
+
+    if (isMissingDisabledModesColumnError(retry.error)) {
+      const legacy = await supabase
+        .from("profiles")
+        .select(legacySelect)
+        .eq("id", userId)
+        .maybeSingle<
+          Omit<AccessProfile, "disabled_modes" | "disabled_assessment_sections">
+        >();
+
+      if (!legacy.error) {
+        return {
+          ok: true,
+          profile: legacy.data
+            ? {
+                ...legacy.data,
+                disabled_modes: null,
+                disabled_assessment_sections: null,
+              }
+            : null,
+          migrationApplied: true,
+          modeLocksApplied: false,
+          assessmentSectionLocksApplied: false,
+        };
+      }
+      if (isMissingAccessColumnsError(legacy.error)) {
+        return {
+          ok: true,
+          profile: null,
+          migrationApplied: false,
+          modeLocksApplied: false,
+          assessmentSectionLocksApplied: false,
+        };
+      }
+      return { ok: false, error: legacy.error };
+    }
+
+    if (isMissingAccessColumnsError(retry.error)) {
+      return {
+        ok: true,
+        profile: null,
+        migrationApplied: false,
+        modeLocksApplied: false,
+        assessmentSectionLocksApplied: false,
+      };
+    }
+    return { ok: false, error: retry.error };
+  }
+
+  // Migration 0008 can be deployed after this code. Retry without mode locks.
+  if (isMissingDisabledModesColumnError(error)) {
+    const retry = await supabase
+      .from("profiles")
+      .select(legacySelect)
+      .eq("id", userId)
+      .maybeSingle<
+        Omit<AccessProfile, "disabled_modes" | "disabled_assessment_sections">
+      >();
+
+    if (!retry.error) {
+      return {
+        ok: true,
+        profile: retry.data
+          ? {
+              ...retry.data,
+              disabled_modes: null,
+              disabled_assessment_sections: null,
+            }
           : null,
         migrationApplied: true,
         modeLocksApplied: false,
+        assessmentSectionLocksApplied: false,
       };
     }
     if (isMissingAccessColumnsError(retry.error)) {
@@ -266,6 +386,7 @@ export async function loadAccessProfile(
         profile: null,
         migrationApplied: false,
         modeLocksApplied: false,
+        assessmentSectionLocksApplied: false,
       };
     }
     return { ok: false, error: retry.error };
@@ -277,6 +398,7 @@ export async function loadAccessProfile(
       profile: null,
       migrationApplied: false,
       modeLocksApplied: false,
+      assessmentSectionLocksApplied: false,
     };
   }
 
@@ -308,6 +430,7 @@ export async function getAccessState(
     isAdmin,
     true,
     loaded.modeLocksApplied,
+    loaded.assessmentSectionLocksApplied,
   );
 
   // Global paywall off → active accounts skip /unlock (DB access_status unchanged).

@@ -112,6 +112,7 @@ export default function AdminSessionDetailPage() {
   const [loading, setLoading] = React.useState(true);
   const [sectionFilter, setSectionFilter] = React.useState("all");
   const [resultFilter, setResultFilter] = React.useState("all");
+  const [sourceFilter, setSourceFilter] = React.useState("all");
   const [primaryOnly, setPrimaryOnly] = React.useState(false);
 
   React.useEffect(() => {
@@ -148,8 +149,19 @@ export default function AdminSessionDetailPage() {
     }
     if (resultFilter === "correct") list = list.filter((a) => a.isCorrect);
     if (resultFilter === "wrong") list = list.filter((a) => !a.isCorrect);
+    if (sourceFilter === "dataset" || sourceFilter === "llm") {
+      list = list.filter((a) => {
+        const kind =
+          a.contentOrigin?.kind ??
+          resolveQuestionContentOrigin({
+            source: a.questionSource,
+            isAiGenerated: a.isAiGenerated,
+          }).kind;
+        return kind === sourceFilter;
+      });
+    }
     return list;
-  }, [session, primaryOnly, sectionFilter, resultFilter]);
+  }, [session, primaryOnly, sectionFilter, resultFilter, sourceFilter]);
 
   if (loading) {
     return <p className="text-sm text-ink-muted">Loading session…</p>;
@@ -223,7 +235,7 @@ export default function AdminSessionDetailPage() {
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-2 sm:grid-cols-3 max-w-xl">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 max-w-3xl">
             <label className="space-y-1">
               <span className="text-[10px] uppercase tracking-wide text-ink-muted">
                 Section
@@ -253,6 +265,20 @@ export default function AdminSessionDetailPage() {
                 <option value="all">All</option>
                 <option value="correct">Correct</option>
                 <option value="wrong">Wrong</option>
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className="text-[10px] uppercase tracking-wide text-ink-muted">
+                Source
+              </span>
+              <select
+                value={sourceFilter}
+                onChange={(e) => setSourceFilter(e.target.value)}
+                className={selectCls}
+              >
+                <option value="all">All sources</option>
+                <option value="dataset">Dataset</option>
+                <option value="llm">LLM</option>
               </select>
             </label>
             <label className="flex items-end gap-2 pb-1">

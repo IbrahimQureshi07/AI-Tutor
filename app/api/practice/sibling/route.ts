@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import {
   accessDeniedResponse,
-  requireFreeAccess,
+  requireModeAccess,
 } from "@/lib/access/require-access";
 import { generateSiblingQuestion } from "@/lib/practice/sibling";
 import type { QuestionRow } from "@/lib/supabase/types";
@@ -20,7 +20,7 @@ const Body = z.object({
 
 export async function POST(req: Request) {
   const supabase = await createClient();
-  const guard = await requireFreeAccess(supabase);
+  const guard = await requireModeAccess(supabase, "practice");
   if (!guard.ok) return accessDeniedResponse(guard);
   const { user } = guard;
 
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
     .eq("id", session_id)
     .eq("user_id", user.id)
     .single();
-  if (!session) {
+  if (!session || session.mode !== "practice") {
     return NextResponse.json({ error: "session not found" }, { status: 404 });
   }
 

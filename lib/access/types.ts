@@ -1,3 +1,5 @@
+import type { ModeKey } from "@/lib/constants";
+
 export type AccessStatus = "none" | "demo_completed" | "active" | "expired";
 
 export type PaymentProvider = "manual" | "stripe";
@@ -8,6 +10,8 @@ export type AccessProfile = {
   access_status: AccessStatus | null;
   paid_at: string | null;
   payment_provider: PaymentProvider | null;
+  /** Added by migration 0008. Missing during a safe pre-migration rollout. */
+  disabled_modes: ModeKey[] | null;
   /** Exists in 0001_init.sql — used to grandfather pre-cutover accounts. */
   created_at: string | null;
 };
@@ -15,6 +19,8 @@ export type AccessProfile = {
 export type AccessState = {
   /** False until migration 0006 is applied on Supabase. */
   migrationApplied: boolean;
+  /** False until migration 0008 is applied; locks safely default to none. */
+  modeLocksApplied: boolean;
   status: AccessStatus;
   hasFullAccess: boolean;
   isAdmin: boolean;
@@ -28,4 +34,6 @@ export type AccessState = {
   canUseFreeModes: boolean;
   /** Allowed paid exam modes (mock/final). */
   canUsePaidExams: boolean;
+  /** Modes explicitly locked for this student by an admin. */
+  disabledModes: ModeKey[];
 };

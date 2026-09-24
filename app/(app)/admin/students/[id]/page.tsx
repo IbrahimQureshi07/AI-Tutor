@@ -14,6 +14,7 @@ import {
   GrantAccessPanel,
   type StudentAccessInfo,
 } from "@/components/admin/grant-access-panel";
+import { ModeLockPanel } from "@/components/admin/mode-lock-panel";
 import {
   sessionRunTypeLabel,
   type SessionHistoryRow,
@@ -274,6 +275,11 @@ export default function AdminStudentDetailPage() {
         studentRole={student.role}
         access={access}
         onUpdated={reloadStudent}
+      />
+
+      <ModeLockPanel
+        studentId={student.id}
+        studentRole={student.role}
       />
 
       <StudentHeadlineMetrics

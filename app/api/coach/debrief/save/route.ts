@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import {
   accessDeniedResponse,
+  getModeAccessDenial,
   requireFreeAccess,
 } from "@/lib/access/require-access";
 import { DebriefPlanSchema, sanitizePlan } from "@/lib/coach/debrief-plan";
@@ -14,6 +15,13 @@ const Body = z.object({
   plan: DebriefPlanSchema,
   committed: z.boolean().default(false),
 });
+const SessionMode = z.enum([
+  "assessment",
+  "practice",
+  "mistakes",
+  "mock",
+  "final",
+]);
 
 /**
  * Persists the agreed-upon debrief plan into the session's config so the
@@ -46,15 +54,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  if (
-    (existing.mode === "mock" || existing.mode === "final") &&
-    !access.canUsePaidExams
-  ) {
-    return NextResponse.json(
-      { error: "payment_required", unlock: "/unlock" },
-      { status: 403 },
-    );
+  const sessionMode = SessionMode.safeParse(existing.mode);
+  if (!sessionMode.success) {
+    return NextResponse.json({ error: "invalid_session_mode" }, { status: 500 });
   }
+  const modeDenied = getModeAccessDenial(access, sessionMode.data);
+  if (modeDenied) return accessDeniedResponse(modeDenied);
 
   const config = (existing.config as Record<string, unknown> | null) ?? {};
   const nextConfig = {

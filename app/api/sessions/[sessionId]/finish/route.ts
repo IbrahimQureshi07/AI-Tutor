@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import {
   accessDeniedResponse,
+  getModeAccessDenial,
   requireFreeAccess,
 } from "@/lib/access/require-access";
 import { buildSummary } from "@/lib/assessment/summary";
@@ -15,6 +16,13 @@ const Body = z.object({
   score_pct: z.number().min(0).max(100),
   duration_ms: z.number().int().nonnegative(),
 });
+const SessionMode = z.enum([
+  "assessment",
+  "practice",
+  "mistakes",
+  "mock",
+  "final",
+]);
 
 export async function POST(
   request: Request,
@@ -40,15 +48,11 @@ export async function POST(
   if (sErr || !session)
     return NextResponse.json({ error: "session not found" }, { status: 404 });
 
-  if (
-    (session.mode === "mock" || session.mode === "final") &&
-    !access.canUsePaidExams
-  ) {
-    return NextResponse.json(
-      { error: "payment_required", unlock: "/unlock" },
-      { status: 403 },
-    );
-  }
+  const sessionMode = SessionMode.safeParse(session.mode);
+  if (!sessionMode.success)
+    return NextResponse.json({ error: "invalid session mode" }, { status: 500 });
+  const modeDenied = getModeAccessDenial(access, sessionMode.data);
+  if (modeDenied) return accessDeniedResponse(modeDenied);
 
   // Build summary + tutor letter for assessment v2.
   let summaryPatch: Record<string, unknown> = {};

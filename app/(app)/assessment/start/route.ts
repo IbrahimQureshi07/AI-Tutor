@@ -3,6 +3,10 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { startSession, attachQuestionsToSession } from "@/lib/runner/session";
 import { pickAssessmentQuestions } from "@/lib/assessment/select";
+import {
+  accessDeniedResponse,
+  requireModeAccess,
+} from "@/lib/access/require-access";
 
 const SMOKE_PER_SECTION = 2;
 
@@ -34,6 +38,9 @@ export async function POST(req: Request) {
     length === "deep" ? 35 : length === "quick" ? 15 : SMOKE_PER_SECTION;
 
   const supabase = await createClient();
+  const guard = await requireModeAccess(supabase, "assessment");
+  if (!guard.ok) return accessDeniedResponse(guard);
+
   const questions = await pickAssessmentQuestions(
     supabase,
     sections,

@@ -4,6 +4,7 @@ import {
   resolveIsAdmin,
 } from "@/lib/auth/bootstrap-admin";
 import { isPaywallEnabled } from "@/lib/access/paywall-settings";
+import { MODES, type ModeKey } from "@/lib/constants";
 import type {
   AccessProfile,
   AccessState,
@@ -19,6 +20,7 @@ const ACCESS_STATUSES: AccessStatus[] = [
   "active",
   "expired",
 ];
+const MODE_KEYS = Object.keys(MODES) as ModeKey[];
 
 export function isMissingAccessColumnsError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -33,6 +35,16 @@ export function isMissingAccessColumnsError(error: unknown): boolean {
   );
 }
 
+export function isMissingDisabledModesColumnError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as { message?: string; details?: string; code?: string };
+  const msg = `${e.message ?? ""} ${e.details ?? ""}`.toLowerCase();
+  return (
+    (e.code === "42703" || e.code === "PGRST204" || msg.includes("column")) &&
+    msg.includes("disabled_modes")
+  );
+}
+
 function normalizeAccessStatus(value: unknown): AccessStatus {
   if (typeof value === "string" && ACCESS_STATUSES.includes(value as AccessStatus)) {
     return value as AccessStatus;
@@ -43,6 +55,31 @@ function normalizeAccessStatus(value: unknown): AccessStatus {
 function normalizePaymentProvider(value: unknown): PaymentProvider | null {
   if (value === "manual" || value === "stripe") return value;
   return null;
+}
+
+function normalizeDisabledModes(value: unknown): ModeKey[] {
+  if (!Array.isArray(value)) return [];
+  return [
+    ...new Set(
+      value.filter(
+        (mode): mode is ModeKey =>
+          typeof mode === "string" && MODE_KEYS.includes(mode as ModeKey),
+      ),
+    ),
+  ];
+}
+
+export function isModeDisabled(
+  access: AccessState,
+  mode: ModeKey,
+): boolean {
+  return !access.isAdmin && access.disabledModes.includes(mode);
+}
+
+export function canUseMode(access: AccessState, mode: ModeKey): boolean {
+  if (isModeDisabled(access, mode)) return false;
+  if (mode === "mock" || mode === "final") return access.canUsePaidExams;
+  return access.canUseFreeModes;
 }
 
 function getFreemiumCutoverMs(): number | null {
@@ -78,6 +115,7 @@ export function getCoursePriceLabel(): string {
 export function buildLegacyFullAccessState(isAdmin: boolean): AccessState {
   return {
     migrationApplied: false,
+    modeLocksApplied: false,
     status: "active",
     hasFullAccess: true,
     isAdmin,
@@ -87,6 +125,7 @@ export function buildLegacyFullAccessState(isAdmin: boolean): AccessState {
     grandfathered: false,
     canUseFreeModes: true,
     canUsePaidExams: true,
+    disabledModes: [],
   };
 }
 
@@ -94,16 +133,22 @@ export function resolveAccessState(
   profile: AccessProfile | null,
   isAdmin: boolean,
   migrationApplied: boolean,
+  modeLocksApplied = true,
 ): AccessState {
   if (!migrationApplied) {
     return buildLegacyFullAccessState(isAdmin);
   }
 
   const grandfathered = !isAdmin && isGrandfathered(profile);
+  const disabledModes =
+    isAdmin || !modeLocksApplied
+      ? []
+      : normalizeDisabledModes(profile?.disabled_modes);
 
   if (profile?.is_active === false && !isAdmin) {
     return {
       migrationApplied: true,
+      modeLocksApplied,
       status: normalizeAccessStatus(profile.access_status),
       hasFullAccess: false,
       isAdmin: false,
@@ -113,12 +158,14 @@ export function resolveAccessState(
       grandfathered: false,
       canUseFreeModes: false,
       canUsePaidExams: false,
+      disabledModes,
     };
   }
 
   if (isAdmin) {
     return {
       migrationApplied: true,
+      modeLocksApplied,
       status: "active",
       hasFullAccess: true,
       isAdmin: true,
@@ -128,6 +175,7 @@ export function resolveAccessState(
       grandfathered: false,
       canUseFreeModes: true,
       canUsePaidExams: true,
+      disabledModes: [],
     };
   }
 
@@ -137,6 +185,7 @@ export function resolveAccessState(
 
   return {
     migrationApplied: true,
+    modeLocksApplied,
     status,
     hasFullAccess,
     isAdmin: false,
@@ -146,6 +195,7 @@ export function resolveAccessState(
     grandfathered,
     canUseFreeModes: true,
     canUsePaidExams,
+    disabledModes,
   };
 }
 
@@ -153,24 +203,77 @@ export async function loadAccessProfile(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<
-  | { ok: true; profile: AccessProfile | null; migrationApplied: true }
-  | { ok: true; profile: null; migrationApplied: false }
+  | {
+      ok: true;
+      profile: AccessProfile | null;
+      migrationApplied: true;
+      modeLocksApplied: boolean;
+    }
+  | {
+      ok: true;
+      profile: null;
+      migrationApplied: false;
+      modeLocksApplied: false;
+    }
   | { ok: false; error: unknown }
 > {
+  const fullSelect =
+    "role, is_active, access_status, paid_at, payment_provider, created_at, disabled_modes";
+  const legacySelect =
+    "role, is_active, access_status, paid_at, payment_provider, created_at";
+
   const { data, error } = await supabase
     .from("profiles")
-    .select(
-      "role, is_active, access_status, paid_at, payment_provider, created_at",
-    )
+    .select(fullSelect)
     .eq("id", userId)
     .maybeSingle<AccessProfile>();
 
   if (!error) {
-    return { ok: true, profile: data ?? null, migrationApplied: true };
+    return {
+      ok: true,
+      profile: data ?? null,
+      migrationApplied: true,
+      modeLocksApplied: true,
+    };
+  }
+
+  // Migration 0008 can be deployed after this code. Retry without the new
+  // column so the existing app keeps working with no extra locks meanwhile.
+  if (isMissingDisabledModesColumnError(error)) {
+    const retry = await supabase
+      .from("profiles")
+      .select(legacySelect)
+      .eq("id", userId)
+      .maybeSingle<Omit<AccessProfile, "disabled_modes">>();
+
+    if (!retry.error) {
+      return {
+        ok: true,
+        profile: retry.data
+          ? { ...retry.data, disabled_modes: null }
+          : null,
+        migrationApplied: true,
+        modeLocksApplied: false,
+      };
+    }
+    if (isMissingAccessColumnsError(retry.error)) {
+      return {
+        ok: true,
+        profile: null,
+        migrationApplied: false,
+        modeLocksApplied: false,
+      };
+    }
+    return { ok: false, error: retry.error };
   }
 
   if (isMissingAccessColumnsError(error)) {
-    return { ok: true, profile: null, migrationApplied: false };
+    return {
+      ok: true,
+      profile: null,
+      migrationApplied: false,
+      modeLocksApplied: false,
+    };
   }
 
   return { ok: false, error };
@@ -196,7 +299,12 @@ export async function getAccessState(
   }
 
   const isAdmin = resolveIsAdmin(user, loaded.profile);
-  const state = resolveAccessState(loaded.profile, isAdmin, true);
+  const state = resolveAccessState(
+    loaded.profile,
+    isAdmin,
+    true,
+    loaded.modeLocksApplied,
+  );
 
   // Global paywall off → active accounts skip /unlock (DB access_status unchanged).
   // Deactivated accounts and admins keep their normal rules.

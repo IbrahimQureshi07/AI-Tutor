@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import {
   accessDeniedResponse,
-  requireFreeAccess,
+  requireModeAccess,
 } from "@/lib/access/require-access";
 
 const Body = z.object({
@@ -12,24 +12,14 @@ const Body = z.object({
 });
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const guard = await requireFreeAccess(supabase);
-  if (!guard.ok) return accessDeniedResponse(guard);
-  const { user, access } = guard;
-
   const json = await request.json().catch(() => ({}));
   const parsed = Body.safeParse(json);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  if (
-    (parsed.data.mode === "mock" || parsed.data.mode === "final") &&
-    !access.canUsePaidExams
-  ) {
-    return NextResponse.json(
-      { error: "payment_required", unlock: "/unlock" },
-      { status: 403 },
-    );
-  }
+  const supabase = await createClient();
+  const guard = await requireModeAccess(supabase, parsed.data.mode);
+  if (!guard.ok) return accessDeniedResponse(guard);
+  const { user } = guard;
 
   const { data, error } = await supabase
     .from("sessions")

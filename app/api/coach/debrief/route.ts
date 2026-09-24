@@ -4,7 +4,7 @@ import { getModel } from "@/lib/ai/provider";
 import { createClient } from "@/lib/supabase/server";
 import {
   accessDeniedStreamResponse,
-  requireFreeAccess,
+  requireModeAccess,
 } from "@/lib/access/require-access";
 import { SECTIONS } from "@/lib/constants";
 import { DebriefPlanSchema } from "@/lib/coach/debrief-plan";
@@ -142,10 +142,6 @@ ${sectionLines || "  (none)"}
 }
 
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const guard = await requireFreeAccess(supabase);
-  if (!guard.ok) return accessDeniedStreamResponse(guard);
-
   const raw = await req.json().catch(() => null);
   const parsed = Body.safeParse(raw);
   if (!parsed.success) {
@@ -156,16 +152,24 @@ export async function POST(req: Request) {
   }
 
   const { messages, snapshot } = parsed.data;
-  if (
-    (snapshot.mode === "mock" || snapshot.mode === "final") &&
-    !guard.access.canUsePaidExams
-  ) {
-    return accessDeniedStreamResponse({
-      ok: false,
-      reason: "payment_required",
-      access: guard.access,
-    });
+  const supabase = await createClient();
+  const guard = await requireModeAccess(supabase, snapshot.mode);
+  if (!guard.ok) return accessDeniedStreamResponse(guard);
+  const { user } = guard;
+
+  const { data: session } = await supabase
+    .from("sessions")
+    .select("mode")
+    .eq("id", snapshot.sessionId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!session || session.mode !== snapshot.mode) {
+    return new Response(
+      JSON.stringify({ error: "session_not_found_or_mode_mismatch" }),
+      { status: 400, headers: { "content-type": "application/json" } },
+    );
   }
+
   const system = buildSystem(snapshot);
 
   const result = streamText({

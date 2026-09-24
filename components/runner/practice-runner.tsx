@@ -261,8 +261,10 @@ export function PracticeRunner({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          session_id: sessionId,
           question_id: q.id,
           wrong_answer: wrongLetter,
+          mode,
         }),
       });
       const json = await res.json();

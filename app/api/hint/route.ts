@@ -4,7 +4,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import {
   accessDeniedResponse,
-  requireFreeAccess,
+  requireModeAccess,
 } from "@/lib/access/require-access";
 import { getModel } from "@/lib/ai/provider";
 
@@ -12,8 +12,10 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const Body = z.object({
+  session_id: z.string().uuid(),
   question_id: z.string().uuid(),
   wrong_answer: z.enum(["A", "B", "C", "D"]).nullable(),
+  mode: z.enum(["assessment", "practice", "mistakes", "mock", "final"]),
 });
 
 const HINT_SYSTEM = `You are a South Carolina real estate salesperson exam tutor giving a SOCRATIC HINT.
@@ -32,14 +34,28 @@ Style:
 - End with one guiding question that points at the reasoning step, not the answer.`;
 
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const guard = await requireFreeAccess(supabase);
-  if (!guard.ok) return accessDeniedResponse(guard);
-
   const json = await req.json().catch(() => ({}));
   const parsed = Body.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  const supabase = await createClient();
+  const guard = await requireModeAccess(supabase, parsed.data.mode);
+  if (!guard.ok) return accessDeniedResponse(guard);
+  const { user } = guard;
+
+  const { data: session } = await supabase
+    .from("sessions")
+    .select("mode")
+    .eq("id", parsed.data.session_id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!session || session.mode !== parsed.data.mode) {
+    return NextResponse.json(
+      { error: "Session not found or mode mismatch." },
+      { status: 400 },
+    );
   }
 
   const { data: q, error } = await supabase

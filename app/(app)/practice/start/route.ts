@@ -9,6 +9,10 @@ import {
   PRACTICE_SMOKE_TOTAL,
 } from "@/lib/practice/pick-questions";
 import { DebriefPlanSchema, sanitizePlan } from "@/lib/coach/debrief-plan";
+import {
+  accessDeniedResponse,
+  requireModeAccess,
+} from "@/lib/access/require-access";
 
 const Body = z
   .object({
@@ -21,12 +25,9 @@ const Body = z
 
 export async function POST(req: Request) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
+  const guard = await requireModeAccess(supabase, "practice");
+  if (!guard.ok) return accessDeniedResponse(guard);
+  const { user } = guard;
 
   const coverage = await getAssessmentCoverage(supabase, user.id);
   if (!coverage.allCoveredEver) {

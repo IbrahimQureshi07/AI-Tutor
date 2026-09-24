@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
-import { getAccessState } from "@/lib/access/check-access";
+import {
+  getAccessState,
+  isModeDisabled,
+} from "@/lib/access/check-access";
+import type { ModeKey } from "@/lib/constants";
 import {
   clearAccessGate,
   hasSupabaseAuthCookie,
@@ -29,6 +33,20 @@ const PUBLIC_PATHS = [
 const PAYWALL_EXEMPT_PREFIXES = ["/unlock", "/pricing", "/settings", "/admin"];
 
 const PAID_EXAM_PREFIXES = ["/mock-exam", "/final-test"] as const;
+const MODE_PREFIXES: ReadonlyArray<readonly [string, ModeKey]> = [
+  ["/assessment", "assessment"],
+  ["/practice", "practice"],
+  ["/mistakes", "mistakes"],
+  ["/mock-exam", "mock"],
+  ["/final-test", "final"],
+];
+
+function modeForPath(pathname: string): ModeKey | null {
+  for (const [prefix, mode] of MODE_PREFIXES) {
+    if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return mode;
+  }
+  return null;
+}
 
 function isPaidExamPath(pathname: string): boolean {
   return PAID_EXAM_PREFIXES.some(
@@ -74,8 +92,25 @@ function redirectTo(
   return res;
 }
 
+function redirectModeLocked(
+  request: NextRequest,
+  mode: ModeKey,
+  gate: AccessGateValue,
+  bootstrapDone?: boolean,
+) {
+  const url = request.nextUrl.clone();
+  url.pathname = "/locked";
+  url.search = "";
+  url.searchParams.set("mode", mode);
+  const res = NextResponse.redirect(url);
+  writeAccessGate(res, gate);
+  if (bootstrapDone) writeBootstrapDone(res);
+  return res;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const requestedMode = modeForPath(pathname);
 
   if (pathname.startsWith("/api")) {
     return NextResponse.next({ request });
@@ -102,7 +137,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Paid session, gate still warm: skip getUser + getAccessState.
-  if (gate === "ok") {
+  if (gate === "ok" && !requestedMode) {
     if (isAuthEntryPath(pathname)) {
       return redirectTo(request, "/dashboard", "ok", bootDone);
     }
@@ -110,7 +145,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Free session, gate still warm: allow the app, but keep paid exams locked.
-  if (gate === "free") {
+  if (gate === "free" && !requestedMode) {
     if (pathname === "/login" || pathname === "/signup") {
       return redirectTo(request, "/dashboard", "free", bootDone);
     }
@@ -214,6 +249,17 @@ export async function middleware(request: NextRequest) {
     const access = await getAccessState(supabase, user);
     if (!access.canUseFreeModes) {
       return redirectTo(request, "/unlock", "lock", didBootstrap);
+    }
+
+    // Mode routes always do a fresh profile read instead of trusting the
+    // coarse access cookie, because per-student locks can change at any time.
+    if (requestedMode && isModeDisabled(access, requestedMode)) {
+      return redirectModeLocked(
+        request,
+        requestedMode,
+        access.canUsePaidExams ? "ok" : "free",
+        didBootstrap,
+      );
     }
 
     // Paid exam routes are visible, but gated: free users see a lock screen.

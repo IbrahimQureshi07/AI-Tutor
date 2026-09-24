@@ -3,7 +3,10 @@ import { z } from "zod";
 import { startSession } from "@/lib/runner/session";
 import { createClient } from "@/lib/supabase/server";
 import { hasFinishedMistakes } from "@/lib/mock/completion";
-import { getAccessState } from "@/lib/access/check-access";
+import {
+  accessDeniedResponse,
+  requireModeAccess,
+} from "@/lib/access/require-access";
 import {
   pickMockQuestions,
   MOCK_TOTAL,
@@ -21,20 +24,9 @@ const Body = z
 
 export async function POST(req: Request) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
-
-  const access = await getAccessState(supabase, user);
-  if (!access.canUsePaidExams) {
-    return NextResponse.json(
-      { error: "payment_required", unlock: "/unlock" },
-      { status: 403 },
-    );
-  }
+  const guard = await requireModeAccess(supabase, "mock");
+  if (!guard.ok) return accessDeniedResponse(guard);
+  const { user } = guard;
 
   const mistakesDone = await hasFinishedMistakes(supabase, user.id);
   if (!mistakesDone) {

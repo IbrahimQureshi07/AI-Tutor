@@ -8,6 +8,10 @@ import {
   getGlobalDisabledModes,
   mergeDisabledModes,
 } from "@/lib/access/global-mode-locks";
+import {
+  getGlobalDisabledAssessmentSections,
+  mergeDisabledAssessmentSections,
+} from "@/lib/access/global-assessment-section-locks";
 import { MODES, SECTIONS, type ModeKey, type SectionCode } from "@/lib/constants";
 import type {
   AccessProfile,
@@ -457,6 +461,17 @@ export async function getAccessState(
       state = {
         ...state,
         disabledModes: mergeDisabledModes(state.disabledModes, globalDisabled),
+      };
+    }
+
+    const globalSections = await getGlobalDisabledAssessmentSections(supabase);
+    if (globalSections.length > 0) {
+      state = {
+        ...state,
+        disabledAssessmentSections: mergeDisabledAssessmentSections(
+          state.disabledAssessmentSections,
+          globalSections,
+        ),
       };
     }
   }

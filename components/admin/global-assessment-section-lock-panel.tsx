@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ListChecks, ShieldCheck } from "lucide-react";
+import { Globe2, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { SECTIONS, type SectionCode } from "@/lib/constants";
 
 type LocksResponse = {
-  migrationApplied?: boolean;
+  settingsTableReady?: boolean;
   disabledAssessmentSections?: SectionCode[];
   error?: string;
 };
@@ -17,49 +17,36 @@ type LocksResponse = {
 const NATIONAL = SECTIONS.filter((s) => s.group === "National");
 const STATE = SECTIONS.filter((s) => s.group === "State");
 
-export function AssessmentSectionLockPanel({
-  studentId,
-  studentRole,
-}: {
-  studentId: string;
-  studentRole: "student" | "admin";
-}) {
+export function GlobalAssessmentSectionLockPanel() {
   const [disabledSections, setDisabledSections] = React.useState<SectionCode[]>(
     [],
   );
-  const [loading, setLoading] = React.useState(studentRole !== "admin");
-  const [migrationApplied, setMigrationApplied] = React.useState(true);
+  const [loading, setLoading] = React.useState(true);
+  const [settingsTableReady, setSettingsTableReady] = React.useState(true);
   const [busySection, setBusySection] = React.useState<SectionCode | null>(
     null,
   );
 
   React.useEffect(() => {
-    if (studentRole === "admin") {
-      setLoading(false);
-      return;
-    }
-
     const controller = new AbortController();
     (async () => {
       try {
-        const res = await fetch(
-          `/api/admin/students/${studentId}/assessment-section-locks`,
-          { cache: "no-store", signal: controller.signal },
-        );
+        const res = await fetch("/api/admin/assessment-section-locks", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
         const json = (await res.json().catch(() => ({}))) as LocksResponse;
         if (!res.ok) {
-          if (json.migrationApplied === false) setMigrationApplied(false);
-          else
-            toast.error(
-              json.error ?? "Could not load Assessment section locks.",
-            );
+          toast.error(
+            json.error ?? "Could not load global Assessment section locks.",
+          );
           return;
         }
         setDisabledSections(json.disabledAssessmentSections ?? []);
-        setMigrationApplied(json.migrationApplied !== false);
+        setSettingsTableReady(json.settingsTableReady !== false);
       } catch (error) {
         if ((error as Error).name !== "AbortError") {
-          toast.error("Could not load Assessment section locks.");
+          toast.error("Could not load global Assessment section locks.");
         }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
@@ -67,7 +54,7 @@ export function AssessmentSectionLockPanel({
     })();
 
     return () => controller.abort();
-  }, [studentId, studentRole]);
+  }, []);
 
   async function setSectionLocked(section: SectionCode, locked: boolean) {
     const previous = disabledSections;
@@ -78,31 +65,32 @@ export function AssessmentSectionLockPanel({
     setDisabledSections(optimistic);
     setBusySection(section);
     try {
-      const res = await fetch(
-        `/api/admin/students/${studentId}/assessment-section-locks`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ section, locked }),
-        },
-      );
+      const res = await fetch("/api/admin/assessment-section-locks", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ section, locked }),
+      });
       const json = (await res.json().catch(() => ({}))) as LocksResponse;
       if (!res.ok) {
         setDisabledSections(previous);
-        if (json.migrationApplied === false) setMigrationApplied(false);
-        toast.error(json.error ?? "Could not update Assessment section lock.");
+        if (json.settingsTableReady === false) setSettingsTableReady(false);
+        toast.error(
+          json.error ?? "Could not update global Assessment section lock.",
+        );
         return;
       }
 
       setDisabledSections(json.disabledAssessmentSections ?? optimistic);
-      const title =
-        SECTIONS.find((s) => s.code === section)?.title ?? section;
+      setSettingsTableReady(json.settingsTableReady !== false);
+      const title = SECTIONS.find((s) => s.code === section)?.title ?? section;
       toast.success(
-        `${section} · ${title} ${locked ? "locked" : "unlocked"}.`,
+        `${section} · ${title} ${
+          locked ? "locked for all students" : "unlocked for all students"
+        }.`,
       );
     } catch {
       setDisabledSections(previous);
-      toast.error("Could not update Assessment section lock.");
+      toast.error("Could not update global Assessment section lock.");
     } finally {
       setBusySection(null);
     }
@@ -130,9 +118,7 @@ export function AssessmentSectionLockPanel({
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium text-ink">
-                      {s.code}
-                    </span>
+                    <span className="text-sm font-medium text-ink">{s.code}</span>
                     <span className="text-sm text-ink-muted truncate">
                       {s.title}
                     </span>
@@ -140,7 +126,7 @@ export function AssessmentSectionLockPanel({
                       variant={locked ? "warn" : "outline"}
                       className="text-[10px]"
                     >
-                      {locked ? "Locked" : "Open"}
+                      {locked ? "Locked for all" : "Open"}
                     </Badge>
                   </div>
                 </div>
@@ -150,7 +136,7 @@ export function AssessmentSectionLockPanel({
                   onCheckedChange={(checked) =>
                     setSectionLocked(s.code, checked)
                   }
-                  aria-label={`${locked ? "Unlock" : "Lock"} ${s.code}`}
+                  aria-label={`${locked ? "Unlock" : "Lock"} ${s.code} for all students`}
                 />
               </div>
             );
@@ -164,31 +150,25 @@ export function AssessmentSectionLockPanel({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <ListChecks className="h-4 w-4 text-primary" />
-          Assessment section locks
+          <Globe2 className="h-4 w-4 text-primary" />
+          Global Assessment section locks
         </CardTitle>
         <p className="text-xs text-ink-muted leading-relaxed">
-          Lock individual Assessment sections (A1–B6) for this student. Locked
-          sections stay blocked in Assessment until unlocked — separate from
-          full Assessment mode lock above, and from global Assessment section
-          locks on the Admin dashboard (either lock blocks the section).
+          Lock Assessment sections (A1–B6) for every student at once. Separate
+          from per-student locks and from full Assessment mode lock — a section
+          is blocked if either global or student lock is on.
         </p>
       </CardHeader>
       <CardContent>
-        {studentRole === "admin" ? (
-          <div className="flex items-start gap-2 rounded-xl border border-border bg-elevated/50 px-4 py-3 text-sm text-ink-muted">
-            <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
-            Admin accounts cannot have Assessment sections locked.
-          </div>
-        ) : loading ? (
+        {loading ? (
           <p className="text-sm text-ink-muted">
-            Loading Assessment section locks…
+            Loading global Assessment section locks…
           </p>
-        ) : !migrationApplied ? (
+        ) : !settingsTableReady ? (
           <div className="rounded-xl border border-warn/40 bg-warn/10 px-4 py-3 text-sm text-ink-muted leading-relaxed">
-            Run migration{" "}
-            <strong>0009_profile_disabled_assessment_sections.sql</strong> on
-            Supabase before using these controls.
+            Settings table not found yet. Run{" "}
+            <strong>0007_app_settings.sql</strong> on Supabase before using these
+            controls.
           </div>
         ) : (
           <div className="grid gap-4 lg:grid-cols-2">
@@ -196,6 +176,10 @@ export function AssessmentSectionLockPanel({
             <SectionGroup title="State" rows={STATE} />
           </div>
         )}
+        <p className="mt-3 flex items-start gap-2 text-[11px] text-ink-muted leading-relaxed">
+          <ListChecks className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          Tip: use student-page Assessment section locks for one learner only.
+        </p>
       </CardContent>
     </Card>
   );

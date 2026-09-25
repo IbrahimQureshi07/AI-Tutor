@@ -2,13 +2,23 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { SECTIONS } from "@/lib/constants";
 import {
   sessionRunTypeLabel,
   type SessionRunType,
 } from "@/lib/admin/session-history";
+import { cn } from "@/lib/utils";
 
 type AttemptRow = {
   id: string;
@@ -25,6 +35,39 @@ type AttemptRow = {
     detail: string;
   };
   createdAt: string;
+};
+
+type DetailCard = {
+  id: string;
+  sectionCode: string;
+  prompt: string;
+  optionA: string;
+  optionB: string;
+  optionC: string;
+  optionD: string;
+  studentPick: string;
+  correctPick: string;
+  isCorrect: boolean;
+  isSibling: boolean;
+  hinted: boolean;
+  contentOrigin: {
+    kind: "dataset" | "llm";
+    label: string;
+    detail: string;
+  };
+  createdAt: string;
+  relation: "focus" | "primary" | "extra_try" | "retry";
+  relationLabel: string;
+};
+
+type DetailResponse = {
+  focus: DetailCard;
+  related: DetailCard[];
+  sessionId: string;
+  mode: string;
+  runType: string;
+  modeLabel: string;
+  error?: string;
 };
 
 type Filters = {
@@ -78,6 +121,7 @@ function fmtDateTime(iso: string): string {
   return d.toLocaleString(undefined, {
     month: "short",
     day: "numeric",
+    year: "numeric",
     hour: "numeric",
     minute: "2-digit",
   });
@@ -96,6 +140,109 @@ function buildQuery(studentId: string, f: Filters): string {
   return `/api/admin/students/${studentId}/attempts${qs ? `?${qs}` : ""}`;
 }
 
+function AttemptDetailCardView({
+  card,
+  emphasis,
+}: {
+  card: DetailCard;
+  emphasis?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl border p-4 space-y-3",
+        emphasis
+          ? "border-primary/40 bg-primary-soft/20"
+          : "border-border/70 bg-elevated/20",
+        !card.isCorrect && "border-danger/25",
+      )}
+    >
+      <div className="flex flex-wrap items-center gap-2 justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-ink-muted">
+            {card.relationLabel}
+          </span>
+          <Badge variant="outline" className="text-[10px] font-medium text-primary">
+            {card.sectionCode}
+          </Badge>
+          <Badge
+            variant={card.contentOrigin.kind === "llm" ? "warn" : "secondary"}
+            className="text-[10px]"
+            title={card.contentOrigin.detail}
+          >
+            {card.contentOrigin.label}
+          </Badge>
+          <Badge
+            variant={card.isCorrect ? "success" : "danger"}
+            className="text-[10px]"
+          >
+            {card.isCorrect ? "correct" : "wrong"}
+          </Badge>
+          <span className="text-xs text-ink-muted">
+            {card.isSibling ? "extra try" : card.hinted ? "hinted" : "primary"}
+          </span>
+        </div>
+        <span className="text-xs text-ink-muted whitespace-nowrap">
+          {fmtDateTime(card.createdAt)}
+        </span>
+      </div>
+
+      <div>
+        <div className="text-[10px] uppercase tracking-wide text-ink-muted mb-1">
+          Question
+        </div>
+        <p className="text-sm text-ink leading-relaxed whitespace-pre-wrap">
+          {card.prompt}
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-lg border border-border/60 bg-surface/60 p-3">
+          <div className="text-[10px] uppercase tracking-wide text-ink-muted mb-1">
+            Student answer
+          </div>
+          <p
+            className={cn(
+              "text-sm leading-relaxed whitespace-pre-wrap",
+              card.isCorrect ? "text-success" : "text-danger",
+            )}
+          >
+            {card.studentPick}
+          </p>
+        </div>
+        <div className="rounded-lg border border-border/60 bg-surface/60 p-3">
+          <div className="text-[10px] uppercase tracking-wide text-ink-muted mb-1">
+            Correct answer (key)
+          </div>
+          <p className="text-sm text-ink leading-relaxed whitespace-pre-wrap">
+            {card.correctPick}
+          </p>
+        </div>
+      </div>
+
+      <details className="text-xs">
+        <summary className="cursor-pointer text-ink-muted hover:text-ink select-none">
+          All options (A–D)
+        </summary>
+        <ul className="mt-2 space-y-1.5 text-ink-muted pl-1">
+          {(
+            [
+              ["A", card.optionA],
+              ["B", card.optionB],
+              ["C", card.optionC],
+              ["D", card.optionD],
+            ] as const
+          ).map(([letter, text]) => (
+            <li key={letter} className="leading-relaxed">
+              <span className="font-medium text-ink">{letter}.</span> {text || "—"}
+            </li>
+          ))}
+        </ul>
+      </details>
+    </div>
+  );
+}
+
 export function StudentAttemptLogPanel({ studentId }: { studentId: string }) {
   const [filters, setFilters] = React.useState<Filters>({
     mode: "all",
@@ -108,6 +255,9 @@ export function StudentAttemptLogPanel({ studentId }: { studentId: string }) {
   const [rows, setRows] = React.useState<AttemptRow[]>([]);
   const [meta, setMeta] = React.useState({ total: 0, filtered: 0 });
   const [loading, setLoading] = React.useState(true);
+  const [openAttemptId, setOpenAttemptId] = React.useState<string | null>(null);
+  const [detail, setDetail] = React.useState<DetailResponse | null>(null);
+  const [detailLoading, setDetailLoading] = React.useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -133,6 +283,42 @@ export function StudentAttemptLogPanel({ studentId }: { studentId: string }) {
     };
   }, [studentId, filters]);
 
+  React.useEffect(() => {
+    if (!openAttemptId) {
+      setDetail(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setDetailLoading(true);
+      setDetail(null);
+      try {
+        const res = await fetch(
+          `/api/admin/students/${studentId}/attempts/${openAttemptId}`,
+          { cache: "no-store" },
+        );
+        const json = (await res.json().catch(() => ({}))) as DetailResponse;
+        if (cancelled) return;
+        if (!res.ok) {
+          toast.error(json.error ?? "Could not load attempt detail.");
+          setOpenAttemptId(null);
+          return;
+        }
+        setDetail(json);
+      } catch {
+        if (!cancelled) {
+          toast.error("Could not load attempt detail.");
+          setOpenAttemptId(null);
+        }
+      } finally {
+        if (!cancelled) setDetailLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [studentId, openAttemptId]);
+
   function setFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
@@ -145,8 +331,8 @@ export function StudentAttemptLogPanel({ studentId }: { studentId: string }) {
       <CardHeader>
         <CardTitle>Question attempt log</CardTitle>
         <p className="text-xs text-ink-muted">
-          Every question answered across all sessions — filter by mode, run type,
-          section, result, or source (dataset vs LLM).
+          Click a question for full detail (student answer + key). Related LLM /
+          extra tries appear under that question only — not the whole session.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -274,12 +460,13 @@ export function StudentAttemptLogPanel({ studentId }: { studentId: string }) {
                     className="border-b border-border/60 align-top hover:bg-elevated/40"
                   >
                     <td className="py-2.5 pr-3 max-w-md">
-                      <Link
-                        href={`/admin/students/${studentId}/sessions/${a.sessionId}`}
-                        className="text-ink hover:text-primary line-clamp-2"
+                      <button
+                        type="button"
+                        onClick={() => setOpenAttemptId(a.id)}
+                        className="text-left text-ink hover:text-primary line-clamp-2 focus-ring rounded-sm"
                       >
                         {a.promptPreview}
-                      </Link>
+                      </button>
                       {a.isSibling && (
                         <span className="text-[10px] text-ink-muted block mt-0.5">
                           extra try
@@ -327,6 +514,65 @@ export function StudentAttemptLogPanel({ studentId }: { studentId: string }) {
           )}
         </div>
       </CardContent>
+
+      <Sheet
+        open={openAttemptId != null}
+        onOpenChange={(open) => {
+          if (!open) setOpenAttemptId(null);
+        }}
+      >
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-xl lg:max-w-2xl overflow-y-auto"
+        >
+          <SheetHeader>
+            <SheetTitle>Attempt detail</SheetTitle>
+            <SheetDescription>
+              Only this question and related follow-ups (LLM / hint retry) —
+              not the full session list.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-4 space-y-4">
+            {detailLoading || !detail ? (
+              <p className="text-sm text-ink-muted">Loading detail…</p>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+                  <span>{detail.modeLabel}</span>
+                  <span>·</span>
+                  <span>
+                    {sessionRunTypeLabel(
+                      detail.runType as SessionRunType,
+                      detail.mode,
+                    )}
+                  </span>
+                  <Button asChild size="sm" variant="outline" className="ml-auto">
+                    <Link
+                      href={`/admin/students/${studentId}/sessions/${detail.sessionId}`}
+                    >
+                      Open full session
+                    </Link>
+                  </Button>
+                </div>
+
+                <AttemptDetailCardView card={detail.focus} emphasis />
+
+                {detail.related.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+                      Related ({detail.related.length})
+                    </p>
+                    {detail.related.map((card) => (
+                      <AttemptDetailCardView key={card.id} card={card} />
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </Card>
   );
 }

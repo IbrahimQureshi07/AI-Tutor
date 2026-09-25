@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  formatOptionWithWording,
   resolveQuestionContentOrigin,
   resolveSessionRunType,
   sessionModeLabel,
@@ -40,6 +41,38 @@ export type AttemptLogResult = {
   filtered: number;
 };
 
+export type AttemptDetailCard = {
+  id: string;
+  questionId: string;
+  parentQuestionId: string | null;
+  sectionCode: string;
+  prompt: string;
+  optionA: string;
+  optionB: string;
+  optionC: string;
+  optionD: string;
+  userAnswer: string | null;
+  correctOption: string;
+  studentPick: string;
+  correctPick: string;
+  isCorrect: boolean;
+  isSibling: boolean;
+  hinted: boolean;
+  contentOrigin: QuestionContentOrigin;
+  createdAt: string;
+  relation: "focus" | "primary" | "extra_try" | "retry";
+  relationLabel: string;
+};
+
+export type AttemptDetailResult = {
+  focus: AttemptDetailCard;
+  related: AttemptDetailCard[];
+  sessionId: string;
+  mode: SessionMode;
+  runType: SessionRunType;
+  modeLabel: string;
+};
+
 function runTypeBucket(type: SessionRunType): "smoke" | "full" | "other" {
   if (type === "smoke") return "smoke";
   if (type === "full") return "full";
@@ -49,6 +82,171 @@ function runTypeBucket(type: SessionRunType): "smoke" | "full" | "other" {
 function truncatePrompt(prompt: string, max = 140): string {
   if (prompt.length <= max) return prompt;
   return `${prompt.slice(0, max - 1)}…`;
+}
+
+type QuestionJoin = {
+  id?: string;
+  section_code?: string;
+  prompt?: string;
+  option_a?: string | null;
+  option_b?: string | null;
+  option_c?: string | null;
+  option_d?: string | null;
+  correct_option?: string | null;
+  source?: string | null;
+  is_ai_generated?: boolean | null;
+  parent_question_id?: string | null;
+};
+
+type RawAttemptRow = {
+  id: string;
+  session_id: string;
+  question_id: string;
+  user_answer: string | null;
+  is_correct: boolean;
+  is_sibling?: boolean;
+  hinted?: boolean;
+  created_at: string;
+  mode?: string;
+  question?: QuestionJoin | null;
+  session?: { mode?: string; config?: unknown } | null;
+};
+
+function mapDetailCard(
+  row: RawAttemptRow,
+  relation: AttemptDetailCard["relation"],
+): AttemptDetailCard {
+  const q = row.question ?? null;
+  const optionA = (q?.option_a ?? "").trim();
+  const optionB = (q?.option_b ?? "").trim();
+  const optionC = (q?.option_c ?? "").trim();
+  const optionD = (q?.option_d ?? "").trim();
+  const opts = { optionA, optionB, optionC, optionD };
+  const userAnswer = row.user_answer ?? null;
+  const correctOption = (q?.correct_option ?? "—").trim() || "—";
+  const contentOrigin = resolveQuestionContentOrigin({
+    source: q?.source,
+    isAiGenerated: q?.is_ai_generated,
+  });
+  const isSibling = Boolean(row.is_sibling);
+  const hinted = Boolean(row.hinted);
+
+  let relationLabel = "Selected attempt";
+  if (relation === "primary") relationLabel = "Primary question";
+  else if (relation === "extra_try") relationLabel = "LLM / extra try";
+  else if (relation === "retry") {
+    relationLabel = hinted ? "Retry (with hint)" : "Retry";
+  } else if (isSibling) {
+    relationLabel = "Selected · extra try";
+  } else if (hinted) {
+    relationLabel = "Selected · hinted";
+  }
+
+  return {
+    id: row.id,
+    questionId: row.question_id,
+    parentQuestionId: q?.parent_question_id ?? null,
+    sectionCode: q?.section_code ?? "—",
+    prompt: (q?.prompt ?? "").trim() || "—",
+    optionA,
+    optionB,
+    optionC,
+    optionD,
+    userAnswer,
+    correctOption,
+    studentPick: formatOptionWithWording(userAnswer, opts),
+    correctPick: formatOptionWithWording(correctOption, opts),
+    isCorrect: Boolean(row.is_correct),
+    isSibling,
+    hinted,
+    contentOrigin,
+    createdAt: row.created_at,
+    relation,
+    relationLabel,
+  };
+}
+
+function classifyRelated(
+  focus: AttemptDetailCard,
+  other: AttemptDetailCard,
+): AttemptDetailCard["relation"] | null {
+  const rootId = focus.parentQuestionId ?? focus.questionId;
+
+  if (other.questionId === focus.questionId) return "retry";
+
+  if (
+    other.parentQuestionId === rootId ||
+    other.parentQuestionId === focus.questionId
+  ) {
+    return "extra_try";
+  }
+
+  if (
+    focus.parentQuestionId &&
+    other.questionId === focus.parentQuestionId &&
+    !other.isSibling
+  ) {
+    return "primary";
+  }
+
+  if (
+    focus.parentQuestionId &&
+    other.parentQuestionId === focus.parentQuestionId
+  ) {
+    return "extra_try";
+  }
+
+  return null;
+}
+
+function chronoFallbackRelated(
+  focus: AttemptDetailCard,
+  sessionCards: AttemptDetailCard[],
+): AttemptDetailCard | null {
+  const focusTs = new Date(focus.createdAt).getTime();
+  if (!focus.isSibling) {
+    const next = sessionCards
+      .filter(
+        (o) =>
+          o.id !== focus.id &&
+          o.isSibling &&
+          o.contentOrigin.kind === "llm" &&
+          new Date(o.createdAt).getTime() >= focusTs &&
+          new Date(o.createdAt).getTime() - focusTs < 30 * 60 * 1000,
+      )
+      .sort(
+        (a, b) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      )[0];
+    return next
+      ? {
+          ...next,
+          relation: "extra_try",
+          relationLabel: "LLM / extra try",
+        }
+      : null;
+  }
+
+  const prev = sessionCards
+    .filter(
+      (o) =>
+        o.id !== focus.id &&
+        !o.isSibling &&
+        o.contentOrigin.kind === "dataset" &&
+        focusTs >= new Date(o.createdAt).getTime() &&
+        focusTs - new Date(o.createdAt).getTime() < 30 * 60 * 1000,
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    )[0];
+  return prev
+    ? {
+        ...prev,
+        relation: "primary",
+        relationLabel: "Primary question",
+      }
+    : null;
 }
 
 export async function loadAttemptLog(
@@ -135,6 +333,118 @@ export async function loadAttemptLog(
     attempts: filtered.slice(0, limit),
     total: all.length,
     filtered: filtered.length,
+  };
+}
+
+const DETAIL_SELECT =
+  "id, mode, session_id, question_id, user_answer, is_correct, is_sibling, hinted, created_at, question:questions(id, section_code, prompt, option_a, option_b, option_c, option_d, correct_option, source, is_ai_generated, parent_question_id), session:sessions(mode, config)";
+
+const DETAIL_SELECT_FALLBACK =
+  "id, mode, session_id, question_id, user_answer, is_correct, hinted, created_at, question:questions(id, section_code, prompt, option_a, option_b, option_c, option_d, correct_option, source, is_ai_generated, parent_question_id), session:sessions(mode, config)";
+
+export async function loadAttemptDetail(
+  client: SupabaseClient,
+  userId: string,
+  attemptId: string,
+): Promise<AttemptDetailResult | null> {
+  let focusRes = await client
+    .from("attempts")
+    .select(DETAIL_SELECT)
+    .eq("id", attemptId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (focusRes.error) {
+    focusRes = await client
+      .from("attempts")
+      .select(DETAIL_SELECT_FALLBACK)
+      .eq("id", attemptId)
+      .eq("user_id", userId)
+      .maybeSingle();
+  }
+
+  if (focusRes.error || !focusRes.data) return null;
+
+  const focusRaw = {
+    ...(focusRes.data as RawAttemptRow),
+    is_sibling: Boolean((focusRes.data as RawAttemptRow).is_sibling),
+  };
+  const focus = mapDetailCard(focusRaw, "focus");
+
+  const sess = focusRaw.session;
+  const sessionMode = (sess?.mode ?? focusRaw.mode ?? "practice") as SessionMode;
+  const runType = resolveSessionRunType(
+    sessionMode,
+    (sess?.config as Record<string, unknown> | null) ?? null,
+  );
+
+  let sessionRes = await client
+    .from("attempts")
+    .select(DETAIL_SELECT)
+    .eq("session_id", focusRaw.session_id)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true })
+    .limit(500);
+
+  if (sessionRes.error) {
+    sessionRes = await client
+      .from("attempts")
+      .select(DETAIL_SELECT_FALLBACK)
+      .eq("session_id", focusRaw.session_id)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true })
+      .limit(500);
+  }
+
+  const sessionCards: AttemptDetailCard[] = [];
+  for (const row of (sessionRes.data ?? []) as RawAttemptRow[]) {
+    sessionCards.push(
+      mapDetailCard(
+        { ...row, is_sibling: Boolean(row.is_sibling) },
+        row.id === focus.id ? "focus" : "retry",
+      ),
+    );
+  }
+
+  const related: AttemptDetailCard[] = [];
+  for (const card of sessionCards) {
+    if (card.id === focus.id) continue;
+    const relation = classifyRelated(focus, card);
+    if (!relation) continue;
+    related.push({
+      ...card,
+      relation,
+      relationLabel:
+        relation === "primary"
+          ? "Primary question"
+          : relation === "extra_try"
+            ? "LLM / extra try"
+            : card.hinted
+              ? "Retry (with hint)"
+              : "Retry",
+    });
+  }
+
+  if (related.length === 0) {
+    const neighbor = chronoFallbackRelated(focus, sessionCards);
+    if (neighbor) related.push(neighbor);
+  }
+
+  related.sort((a, b) => {
+    const rank = (r: AttemptDetailCard["relation"]) =>
+      r === "primary" ? 0 : r === "retry" ? 1 : 2;
+    const d = rank(a.relation) - rank(b.relation);
+    if (d !== 0) return d;
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  });
+
+  return {
+    focus,
+    related: related.slice(0, 6),
+    sessionId: focusRaw.session_id,
+    mode: sessionMode,
+    runType,
+    modeLabel: sessionModeLabel(sessionMode),
   };
 }
 

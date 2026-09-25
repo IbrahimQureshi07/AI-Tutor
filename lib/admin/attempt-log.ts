@@ -347,27 +347,29 @@ export async function loadAttemptDetail(
   userId: string,
   attemptId: string,
 ): Promise<AttemptDetailResult | null> {
-  let focusRes = await client
+  const focusPrimary = await client
     .from("attempts")
     .select(DETAIL_SELECT)
     .eq("id", attemptId)
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (focusRes.error) {
-    focusRes = await client
-      .from("attempts")
-      .select(DETAIL_SELECT_FALLBACK)
-      .eq("id", attemptId)
-      .eq("user_id", userId)
-      .maybeSingle();
-  }
+  const focusFallback = focusPrimary.error
+    ? await client
+        .from("attempts")
+        .select(DETAIL_SELECT_FALLBACK)
+        .eq("id", attemptId)
+        .eq("user_id", userId)
+        .maybeSingle()
+    : null;
 
-  if (focusRes.error || !focusRes.data) return null;
+  const focusData = focusPrimary.error ? focusFallback?.data : focusPrimary.data;
+  const focusError = focusPrimary.error ? focusFallback?.error : focusPrimary.error;
+  if (focusError || !focusData) return null;
 
   const focusRaw = {
-    ...(focusRes.data as RawAttemptRow),
-    is_sibling: Boolean((focusRes.data as RawAttemptRow).is_sibling),
+    ...(focusData as RawAttemptRow),
+    is_sibling: Boolean((focusData as RawAttemptRow).is_sibling),
   };
   const focus = mapDetailCard(focusRaw, "focus");
 
@@ -378,7 +380,7 @@ export async function loadAttemptDetail(
     (sess?.config as Record<string, unknown> | null) ?? null,
   );
 
-  let sessionRes = await client
+  const sessionPrimary = await client
     .from("attempts")
     .select(DETAIL_SELECT)
     .eq("session_id", focusRaw.session_id)
@@ -386,18 +388,22 @@ export async function loadAttemptDetail(
     .order("created_at", { ascending: true })
     .limit(500);
 
-  if (sessionRes.error) {
-    sessionRes = await client
-      .from("attempts")
-      .select(DETAIL_SELECT_FALLBACK)
-      .eq("session_id", focusRaw.session_id)
-      .eq("user_id", userId)
-      .order("created_at", { ascending: true })
-      .limit(500);
-  }
+  const sessionFallback = sessionPrimary.error
+    ? await client
+        .from("attempts")
+        .select(DETAIL_SELECT_FALLBACK)
+        .eq("session_id", focusRaw.session_id)
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true })
+        .limit(500)
+    : null;
+
+  const sessionRows = (
+    (sessionPrimary.error ? sessionFallback?.data : sessionPrimary.data) ?? []
+  ) as RawAttemptRow[];
 
   const sessionCards: AttemptDetailCard[] = [];
-  for (const row of (sessionRes.data ?? []) as RawAttemptRow[]) {
+  for (const row of sessionRows) {
     sessionCards.push(
       mapDetailCard(
         { ...row, is_sibling: Boolean(row.is_sibling) },

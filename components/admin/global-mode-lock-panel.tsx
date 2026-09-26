@@ -46,11 +46,20 @@ type LocksResponse = {
   error?: string;
 };
 
-export function GlobalModeLockPanel() {
+export function GlobalModeLockPanel({
+  onAssessmentLockChange,
+}: {
+  /** Notifies when global Assessment mode lock flips (for section-lock UI sync). */
+  onAssessmentLockChange?: (locked: boolean) => void;
+} = {}) {
   const [disabledModes, setDisabledModes] = React.useState<ModeKey[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [settingsTableReady, setSettingsTableReady] = React.useState(true);
   const [busyMode, setBusyMode] = React.useState<ModeKey | null>(null);
+
+  React.useEffect(() => {
+    onAssessmentLockChange?.(disabledModes.includes("assessment"));
+  }, [disabledModes, onAssessmentLockChange]);
 
   React.useEffect(() => {
     const controller = new AbortController();

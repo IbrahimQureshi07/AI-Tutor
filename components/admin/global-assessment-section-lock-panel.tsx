@@ -17,7 +17,12 @@ type LocksResponse = {
 const NATIONAL = SECTIONS.filter((s) => s.group === "National");
 const STATE = SECTIONS.filter((s) => s.group === "State");
 
-export function GlobalAssessmentSectionLockPanel() {
+export function GlobalAssessmentSectionLockPanel({
+  assessmentModeLocked = false,
+}: {
+  /** When global Assessment mode is locked, show A1–B6 as locked (UI only). */
+  assessmentModeLocked?: boolean;
+} = {}) {
   const [disabledSections, setDisabledSections] = React.useState<SectionCode[]>(
     [],
   );
@@ -110,7 +115,8 @@ export function GlobalAssessmentSectionLockPanel() {
         </p>
         <div className="divide-y divide-border rounded-xl border border-border">
           {rows.map((s) => {
-            const locked = disabledSections.includes(s.code);
+            const sectionLocked = disabledSections.includes(s.code);
+            const locked = assessmentModeLocked || sectionLocked;
             return (
               <div
                 key={s.code}
@@ -126,13 +132,17 @@ export function GlobalAssessmentSectionLockPanel() {
                       variant={locked ? "warn" : "outline"}
                       className="text-[10px]"
                     >
-                      {locked ? "Locked for all" : "Open"}
+                      {assessmentModeLocked
+                        ? "Locked for all"
+                        : sectionLocked
+                          ? "Locked for all"
+                          : "Open"}
                     </Badge>
                   </div>
                 </div>
                 <Switch
                   checked={locked}
-                  disabled={busySection !== null}
+                  disabled={assessmentModeLocked || busySection !== null}
                   onCheckedChange={(checked) =>
                     setSectionLocked(s.code, checked)
                   }
@@ -154,9 +164,19 @@ export function GlobalAssessmentSectionLockPanel() {
           Global Assessment section locks
         </CardTitle>
         <p className="text-xs text-ink-muted leading-relaxed">
-          Lock Assessment sections (A1–B6) for every student at once. Separate
-          from per-student locks and from full Assessment mode lock — a section
-          is blocked if either global or student lock is on.
+          {assessmentModeLocked ? (
+            <>
+              Assessment mode is locked globally — every section below is blocked
+              for all students. Unlock Assessment above to manage A1–B6
+              individually again.
+            </>
+          ) : (
+            <>
+              Lock Assessment sections (A1–B6) for every student at once. Separate
+              from per-student locks and from full Assessment mode lock — a
+              section is blocked if either global or student lock is on.
+            </>
+          )}
         </p>
       </CardHeader>
       <CardContent>

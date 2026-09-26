@@ -11,6 +11,23 @@ import { PaywallTogglePanel } from "@/components/admin/paywall-toggle-panel";
 import { GlobalModeLockPanel } from "@/components/admin/global-mode-lock-panel";
 import { GlobalAssessmentSectionLockPanel } from "@/components/admin/global-assessment-section-lock-panel";
 
+/** Keeps Assessment mode lock in sync with the A1–B6 section lock UI. */
+function AdminGlobalLockSync() {
+  const [assessmentModeLocked, setAssessmentModeLocked] = React.useState(false);
+  const onAssessmentLockChange = React.useCallback((locked: boolean) => {
+    setAssessmentModeLocked(locked);
+  }, []);
+
+  return (
+    <>
+      <GlobalModeLockPanel onAssessmentLockChange={onAssessmentLockChange} />
+      <GlobalAssessmentSectionLockPanel
+        assessmentModeLocked={assessmentModeLocked}
+      />
+    </>
+  );
+}
+
 type ModeKey = "assessment" | "practice" | "mistakes" | "mock" | "final";
 
 type Overview = {
@@ -138,8 +155,7 @@ export default function AdminHomePage() {
       </div>
 
       <PaywallTogglePanel />
-      <GlobalModeLockPanel />
-      <GlobalAssessmentSectionLockPanel />
+      <AdminGlobalLockSync />
 
       {loading ? (
         <p className="text-sm text-ink-muted">Loading overview…</p>

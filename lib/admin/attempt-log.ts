@@ -45,6 +45,8 @@ export type AttemptDetailCard = {
   id: string;
   questionId: string;
   parentQuestionId: string | null;
+  /** Attempt-level link: sibling → primary attempt (most reliable). */
+  parentAttemptId: string | null;
   sectionCode: string;
   prompt: string;
   optionA: string;
@@ -105,12 +107,33 @@ type RawAttemptRow = {
   user_answer: string | null;
   is_correct: boolean;
   is_sibling?: boolean;
+  parent_attempt_id?: string | null;
   hinted?: boolean;
   created_at: string;
   mode?: string;
   question?: QuestionJoin | null;
   session?: { mode?: string; config?: unknown } | null;
 };
+
+function normalizeRawAttempt(row: RawAttemptRow): RawAttemptRow {
+  return {
+    ...row,
+    is_sibling: Boolean(row.is_sibling),
+    parent_attempt_id: row.parent_attempt_id ?? null,
+  };
+}
+
+function relationLabelFor(
+  relation: AttemptDetailCard["relation"],
+  card: Pick<AttemptDetailCard, "hinted">,
+): string {
+  if (relation === "primary") return "Primary question";
+  if (relation === "extra_try") return "LLM / extra try";
+  if (relation === "retry") {
+    return card.hinted ? "Retry (with hint)" : "Retry";
+  }
+  return "Selected attempt";
+}
 
 function mapDetailCard(
   row: RawAttemptRow,
@@ -146,6 +169,7 @@ function mapDetailCard(
     id: row.id,
     questionId: row.question_id,
     parentQuestionId: q?.parent_question_id ?? null,
+    parentAttemptId: row.parent_attempt_id ?? null,
     sectionCode: q?.section_code ?? "—",
     prompt: (q?.prompt ?? "").trim() || "—",
     optionA,
@@ -170,6 +194,16 @@ function classifyRelated(
   focus: AttemptDetailCard,
   other: AttemptDetailCard,
 ): AttemptDetailCard["relation"] | null {
+  // Attempt-level link from practice runner (authoritative).
+  if (other.parentAttemptId === focus.id) return "extra_try";
+  if (focus.parentAttemptId === other.id) return "primary";
+  if (
+    focus.parentAttemptId &&
+    other.parentAttemptId === focus.parentAttemptId
+  ) {
+    return "extra_try";
+  }
+
   const rootId = focus.parentQuestionId ?? focus.questionId;
 
   if (other.questionId === focus.questionId) return "retry";
@@ -210,7 +244,6 @@ function chronoFallbackRelated(
         (o) =>
           o.id !== focus.id &&
           o.isSibling &&
-          o.contentOrigin.kind === "llm" &&
           new Date(o.createdAt).getTime() >= focusTs &&
           new Date(o.createdAt).getTime() - focusTs < 30 * 60 * 1000,
       )
@@ -232,7 +265,6 @@ function chronoFallbackRelated(
       (o) =>
         o.id !== focus.id &&
         !o.isSibling &&
-        o.contentOrigin.kind === "dataset" &&
         focusTs >= new Date(o.createdAt).getTime() &&
         focusTs - new Date(o.createdAt).getTime() < 30 * 60 * 1000,
     )
@@ -337,40 +369,105 @@ export async function loadAttemptLog(
 }
 
 const DETAIL_SELECT =
-  "id, mode, session_id, question_id, user_answer, is_correct, is_sibling, hinted, created_at, question:questions(id, section_code, prompt, option_a, option_b, option_c, option_d, correct_option, source, is_ai_generated, parent_question_id), session:sessions(mode, config)";
+  "id, mode, session_id, question_id, user_answer, is_correct, is_sibling, parent_attempt_id, hinted, created_at, question:questions(id, section_code, prompt, option_a, option_b, option_c, option_d, correct_option, source, is_ai_generated, parent_question_id), session:sessions(mode, config)";
 
 const DETAIL_SELECT_FALLBACK =
   "id, mode, session_id, question_id, user_answer, is_correct, hinted, created_at, question:questions(id, section_code, prompt, option_a, option_b, option_c, option_d, correct_option, source, is_ai_generated, parent_question_id), session:sessions(mode, config)";
+
+async function selectAttemptRows(
+  build: (
+    select: string,
+  ) => PromiseLike<{ data: unknown; error: { message?: string } | null }>,
+): Promise<RawAttemptRow[]> {
+  const primary = await build(DETAIL_SELECT);
+  if (!primary.error) {
+    return ((primary.data as RawAttemptRow[] | null) ?? []).map(
+      normalizeRawAttempt,
+    );
+  }
+  const fallback = await build(DETAIL_SELECT_FALLBACK);
+  return ((fallback.data as RawAttemptRow[] | null) ?? []).map(
+    normalizeRawAttempt,
+  );
+}
+
+async function selectAttemptMaybe(
+  build: (
+    select: string,
+  ) => PromiseLike<{ data: unknown; error: { message?: string } | null }>,
+): Promise<RawAttemptRow | null> {
+  const primary = await build(DETAIL_SELECT);
+  if (!primary.error && primary.data) {
+    return normalizeRawAttempt(primary.data as RawAttemptRow);
+  }
+  if (!primary.error && !primary.data) return null;
+
+  const fallback = await build(DETAIL_SELECT_FALLBACK);
+  if (fallback.error || !fallback.data) return null;
+  return normalizeRawAttempt(fallback.data as RawAttemptRow);
+}
+
+/** Pull parent / children linked via attempts.parent_attempt_id. */
+async function fetchAttemptLinkedRows(
+  client: SupabaseClient,
+  userId: string,
+  focus: RawAttemptRow,
+): Promise<RawAttemptRow[]> {
+  const rows: RawAttemptRow[] = [];
+
+  const children = await selectAttemptRows((select) =>
+    client
+      .from("attempts")
+      .select(select)
+      .eq("user_id", userId)
+      .eq("parent_attempt_id", focus.id)
+      .order("created_at", { ascending: true })
+      .limit(20),
+  );
+  rows.push(...children);
+
+  if (focus.parent_attempt_id) {
+    const parent = await selectAttemptMaybe((select) =>
+      client
+        .from("attempts")
+        .select(select)
+        .eq("user_id", userId)
+        .eq("id", focus.parent_attempt_id!)
+        .maybeSingle(),
+    );
+    if (parent) rows.push(parent);
+
+    const coSiblings = await selectAttemptRows((select) =>
+      client
+        .from("attempts")
+        .select(select)
+        .eq("user_id", userId)
+        .eq("parent_attempt_id", focus.parent_attempt_id!)
+        .neq("id", focus.id)
+        .order("created_at", { ascending: true })
+        .limit(20),
+    );
+    rows.push(...coSiblings);
+  }
+
+  return rows;
+}
 
 export async function loadAttemptDetail(
   client: SupabaseClient,
   userId: string,
   attemptId: string,
 ): Promise<AttemptDetailResult | null> {
-  const focusPrimary = await client
-    .from("attempts")
-    .select(DETAIL_SELECT)
-    .eq("id", attemptId)
-    .eq("user_id", userId)
-    .maybeSingle();
+  const focusRaw = await selectAttemptMaybe((select) =>
+    client
+      .from("attempts")
+      .select(select)
+      .eq("id", attemptId)
+      .eq("user_id", userId)
+      .maybeSingle(),
+  );
+  if (!focusRaw) return null;
 
-  const focusFallback = focusPrimary.error
-    ? await client
-        .from("attempts")
-        .select(DETAIL_SELECT_FALLBACK)
-        .eq("id", attemptId)
-        .eq("user_id", userId)
-        .maybeSingle()
-    : null;
-
-  const focusData = focusPrimary.error ? focusFallback?.data : focusPrimary.data;
-  const focusError = focusPrimary.error ? focusFallback?.error : focusPrimary.error;
-  if (focusError || !focusData) return null;
-
-  const focusRaw = {
-    ...(focusData as RawAttemptRow),
-    is_sibling: Boolean((focusData as RawAttemptRow).is_sibling),
-  };
   const focus = mapDetailCard(focusRaw, "focus");
 
   const sess = focusRaw.session;
@@ -380,60 +477,48 @@ export async function loadAttemptDetail(
     (sess?.config as Record<string, unknown> | null) ?? null,
   );
 
-  const sessionPrimary = await client
-    .from("attempts")
-    .select(DETAIL_SELECT)
-    .eq("session_id", focusRaw.session_id)
-    .eq("user_id", userId)
-    .order("created_at", { ascending: true })
-    .limit(500);
-
-  const sessionFallback = sessionPrimary.error
-    ? await client
+  const [sessionRows, linkedRows] = await Promise.all([
+    selectAttemptRows((select) =>
+      client
         .from("attempts")
-        .select(DETAIL_SELECT_FALLBACK)
+        .select(select)
         .eq("session_id", focusRaw.session_id)
         .eq("user_id", userId)
         .order("created_at", { ascending: true })
-        .limit(500)
-    : null;
+        .limit(500),
+    ),
+    fetchAttemptLinkedRows(client, userId, focusRaw),
+  ]);
 
-  const sessionRows = (
-    (sessionPrimary.error ? sessionFallback?.data : sessionPrimary.data) ?? []
-  ) as RawAttemptRow[];
+  const byId = new Map<string, RawAttemptRow>();
+  for (const row of [...sessionRows, ...linkedRows]) {
+    byId.set(row.id, row);
+  }
 
-  const sessionCards: AttemptDetailCard[] = [];
-  for (const row of sessionRows) {
-    sessionCards.push(
-      mapDetailCard(
-        { ...row, is_sibling: Boolean(row.is_sibling) },
-        row.id === focus.id ? "focus" : "retry",
-      ),
+  const poolCards: AttemptDetailCard[] = [];
+  for (const row of byId.values()) {
+    poolCards.push(
+      mapDetailCard(row, row.id === focus.id ? "focus" : "retry"),
     );
   }
 
   const related: AttemptDetailCard[] = [];
-  for (const card of sessionCards) {
+  const seen = new Set<string>();
+  for (const card of poolCards) {
     if (card.id === focus.id) continue;
     const relation = classifyRelated(focus, card);
     if (!relation) continue;
+    seen.add(card.id);
     related.push({
       ...card,
       relation,
-      relationLabel:
-        relation === "primary"
-          ? "Primary question"
-          : relation === "extra_try"
-            ? "LLM / extra try"
-            : card.hinted
-              ? "Retry (with hint)"
-              : "Retry",
+      relationLabel: relationLabelFor(relation, card),
     });
   }
 
   if (related.length === 0) {
-    const neighbor = chronoFallbackRelated(focus, sessionCards);
-    if (neighbor) related.push(neighbor);
+    const neighbor = chronoFallbackRelated(focus, poolCards);
+    if (neighbor && !seen.has(neighbor.id)) related.push(neighbor);
   }
 
   related.sort((a, b) => {

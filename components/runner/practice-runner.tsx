@@ -293,6 +293,7 @@ export function PracticeRunner({
         body: JSON.stringify({
           session_id: sessionId,
           question_id: q.id,
+          mode,
           exclude_ids: excludeIds,
           target_difficulty: siblingDifficulty,
         }),

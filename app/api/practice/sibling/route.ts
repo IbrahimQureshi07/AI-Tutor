@@ -11,19 +11,18 @@ import type { QuestionRow } from "@/lib/supabase/types";
 export const runtime = "nodejs";
 export const maxDuration = 45;
 
+/** Sibling follow-ups are used by Practice and Mistakes runners only. */
+const SiblingMode = z.enum(["practice", "mistakes"]);
+
 const Body = z.object({
   session_id: z.string().uuid(),
   question_id: z.string().uuid(),
+  mode: SiblingMode,
   exclude_ids: z.array(z.string().uuid()).optional().default([]),
   target_difficulty: z.enum(["same", "harder"]).optional().default("same"),
 });
 
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const guard = await requireModeAccess(supabase, "practice");
-  if (!guard.ok) return accessDeniedResponse(guard);
-  const { user } = guard;
-
   const json = await req.json().catch(() => ({}));
   const parsed = Body.safeParse(json);
   if (!parsed.success) {
@@ -33,16 +32,26 @@ export async function POST(req: Request) {
     );
   }
 
-  const { session_id, question_id, exclude_ids, target_difficulty } = parsed.data;
+  const { session_id, question_id, mode, exclude_ids, target_difficulty } =
+    parsed.data;
 
+  const supabase = await createClient();
+  const guard = await requireModeAccess(supabase, mode);
+  if (!guard.ok) return accessDeniedResponse(guard);
+  const { user } = guard;
+
+  // Never trust client mode alone — must match an owned session.
   const { data: session } = await supabase
     .from("sessions")
     .select("id, mode, user_id")
     .eq("id", session_id)
     .eq("user_id", user.id)
-    .single();
-  if (!session || session.mode !== "practice") {
-    return NextResponse.json({ error: "session not found" }, { status: 404 });
+    .maybeSingle();
+  if (!session || session.mode !== mode) {
+    return NextResponse.json(
+      { error: "session not found or mode mismatch" },
+      { status: 404 },
+    );
   }
 
   const { data: parentQ, error: qErr } = await supabase
